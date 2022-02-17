@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Main">
+      <UniqueIdentifier>{b9d60d09-878e-4ede-b6bd-3ea58bdf2821}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Other">
+      <UniqueIdentifier>{24f5c232-d38e-4c56-88dc-427cba3b89bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\WorldMap">
+      <UniqueIdentifier>{0ad56fcc-4bf8-4002-8101-1959822e13c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\LocalMap">
+      <UniqueIdentifier>{c39680b8-a954-41c4-a5a4-f9264ff423a8}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\MapGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Main.cpp">
+      <Filter>Main</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Grid.cpp">
+      <Filter>Source Files\Other</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Region.cpp">
+      <Filter>Source Files\Other</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\WorldMapUIRect.cpp">
+      <Filter>Source Files\Other</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\LocalMap.cpp">
+      <Filter>Source Files\LocalMap</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\WorldMap.cpp">
+      <Filter>Source Files\WorldMap</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\MapGenerator.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Grid.h">
+      <Filter>Source Files\Other</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\HeightBiomes.h">
+      <Filter>Source Files\Other</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Region.h">
+      <Filter>Source Files\Other</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\WorldMapUIRect.h">
+      <Filter>Source Files\Other</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\LocalMap.h">
+      <Filter>Source Files\LocalMap</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\WorldMap.h">
+      <Filter>Source Files\WorldMap</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
