@@ -9,8 +9,8 @@ E2::UIImage::UIImage(Texture texture, Rect src, Rect dest,UIDesignCoord x, UIDes
 {
     if (src.w == 0 || src.h == 0)
     {
-        src.w = m_texture.dememsion.x;
-        src.h = m_texture.dememsion.y;
+        src.w = m_texture.dimension.x;
+        src.h = m_texture.dimension.y;
     }
     m_sourceRects.emplace_back(src);
     SetPosition(x,y);

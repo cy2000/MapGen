@@ -21,5 +21,6 @@ namespace E2
         UIElement* HitTest();
         void WillDrawDebugFrame(bool b) { m_drawDebugFrame = b; }
         void ClearUI();
+        UIElement* GetElement(const char* pName);
     };
 }

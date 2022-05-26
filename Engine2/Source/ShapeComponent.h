@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "Vector2.h"
+#include "Color.h"
 #include <vector>
 
 namespace E2
@@ -15,6 +16,8 @@ namespace E2
         std::vector<Vector2> m_vertexPositions;
         std::vector<Vector2> m_edges;
 
+        Color m_color = Mono::kWhite;
+
     public:
         ShapeComponent(GameObject* pOwner);
         virtual ~ShapeComponent();
@@ -23,5 +26,6 @@ namespace E2
 
         void AddVertex(int x, int y);
         void BuildEdge(int firstVertexId, int secondVertexId);
+        void SetColor(E2::Color color) { m_color = color; }
     };
 }

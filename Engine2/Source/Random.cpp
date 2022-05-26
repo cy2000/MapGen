@@ -39,6 +39,15 @@ uint64_t E2::Random(uint64_t min, uint64_t max)
     return randomNum % range + min;
 }
 
+bool E2::RandomBool(int base)
+{
+    assert(base >= 1);
+    auto randomNum = Random();
+    auto resault = randomNum % base;
+
+    return resault == 0;
+}
+
 
 float E2::RandomF(float min, float max)
 {

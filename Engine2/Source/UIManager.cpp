@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "UIManager.h"
 #include "UIElement.h"
+#include "UITextInput.h"
 #include "Engine.h"
 
 E2::UIManager::UIManager()
@@ -82,6 +83,11 @@ void E2::UIManager::Update()
         if (m_pKeyFocus)
             m_pKeyFocus->OnKeyDown(E2::Engine::Get().GetLastKeyPressed());
     }
+
+    for (auto* pElement : m_rootElements)
+    {
+        pElement->Update();
+    }
 }
 
 void E2::UIManager::Draw()
@@ -126,4 +132,21 @@ void E2::UIManager::ClearUI()
         pElement = nullptr;
     }
     m_rootElements.clear();
+}
+
+E2::UIElement* E2::UIManager::GetElement(const char* pName)
+{
+    std::string name{pName};
+    if (name == "UITextInput")
+    {
+        for (auto* p : m_rootElements)
+        {
+            if (dynamic_cast<UITextInput*>(p))
+            {
+                return p;
+            }
+        }
+    }
+
+    return nullptr;
 }

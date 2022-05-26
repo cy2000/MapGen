@@ -13,6 +13,7 @@ namespace E2
             Space, Return, BackSpace, Escape,
             Left, Right, Up, Down,
             LeftCtrl, LeftAlt, LeftShift,
+            F1,F2,F3,
             KeyCodeMax,
         };
 

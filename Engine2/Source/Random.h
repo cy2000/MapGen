@@ -10,6 +10,8 @@ namespace E2
 
     uint64_t Random();
     uint64_t Random(uint64_t min, uint64_t max);
+    //int Random(int min, int max);
+    bool RandomBool(int base);
 
     float RandomF(float min, float max);
 }

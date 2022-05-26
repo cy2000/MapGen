@@ -100,6 +100,30 @@ void E2::Device::ForceRender()
     SDL_RenderPresent(m_pRenderer);
 }
 
+void E2::Device::CleanRenderer()
+{
+    SDL_RenderClear(m_pRenderer);
+}
+
+E2::Texture E2::Device::CombineCurrentView()
+{
+    E2::Texture currentView{};
+    int windowWidth = 0;
+    int windowHeight = 0;
+    SDL_GetWindowSize(m_pWindow, &windowWidth, &windowHeight);
+    SDL_Surface* pScreenCap = SDL_CreateRGBSurface(0, windowWidth, windowHeight, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+    SDL_RenderReadPixels(m_pRenderer, NULL, SDL_PIXELFORMAT_ARGB8888, pScreenCap->pixels, pScreenCap->pitch);
+    SDL_Texture* pScreenCapTexture = SDL_CreateTextureFromSurface(m_pRenderer, pScreenCap);
+
+    currentView.dimension.x = windowWidth;
+    currentView.dimension.y = windowHeight;
+    currentView.pTexture = pScreenCapTexture;
+    currentView.type = TextureType::Unknown;
+
+    SDL_FreeSurface(pScreenCap);
+    return currentView;
+}
+
 E2::Texture E2::Device::CreateTexture(std::byte* pResource, size_t size, TextureType type)
 {
     Texture texture{};
@@ -115,13 +139,18 @@ E2::Texture E2::Device::CreateTexture(std::byte* pResource, size_t size, Texture
         {
             pSurface = IMG_LoadPNG_RW(pRWop);
         }
+        else
+        {
+            //unsupported format
+            assert(false && "Unsupported Image Format");
+        }
         
         SDL_Texture* pTexture = SDL_CreateTextureFromSurface(m_pRenderer, pSurface);
         texture.pTexture = pTexture;
         texture.type = type;    //TODO: change type by file extension
         if (pSurface)
         {
-            texture.dememsion = { pSurface->w, pSurface->h };
+            texture.dimension = { pSurface->w, pSurface->h };
         }
         SDL_FreeSurface(pSurface);
         SDL_RWclose(pRWop);
@@ -158,11 +187,16 @@ E2::Texture E2::Device::CreateTextTexture(Font& font, std::string& text, uint8_t
         SDL_Texture* pTexture = SDL_CreateTextureFromSurface(m_pRenderer, pSurface);
         texture.pTexture = pTexture;
         texture.type = TextureType::Text;    //TODO: change type 
-        texture.dememsion = { pSurface->w, pSurface->h };
+        texture.dimension = { pSurface->w, pSurface->h };
         font.charW = pSurface->w / (int)text.size();
         font.charH = pSurface->h;
         SDL_FreeSurface(pSurface);
     }
 
     return texture;
+}
+
+void E2::Device::DestroyTexture(E2::Texture& texture)
+{
+    SDL_DestroyTexture(texture.pTexture);
 }

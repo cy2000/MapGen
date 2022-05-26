@@ -13,7 +13,7 @@ E2::Device::~Device()
     
 }
 
-bool E2::Device::Init(const GameInfo& info)
+bool E2::Device::Init(const GameSetting& info)
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 

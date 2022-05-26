@@ -8,14 +8,29 @@
     <Filter Include="Main">
       <UniqueIdentifier>{b9d60d09-878e-4ede-b6bd-3ea58bdf2821}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Other">
+    <Filter Include="Source Files\Scene">
+      <UniqueIdentifier>{727e042e-3cde-4d40-a9e5-78a4a13073f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Utility">
       <UniqueIdentifier>{24f5c232-d38e-4c56-88dc-427cba3b89bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\LocalMap">
+      <UniqueIdentifier>{c39680b8-a954-41c4-a5a4-f9264ff423a8}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\WorldMap">
       <UniqueIdentifier>{0ad56fcc-4bf8-4002-8101-1959822e13c0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\LocalMap">
-      <UniqueIdentifier>{c39680b8-a954-41c4-a5a4-f9264ff423a8}</UniqueIdentifier>
+    <Filter Include="Source Files\StaticMapElement">
+      <UniqueIdentifier>{89393f57-66db-4af2-b25c-4530a6c0a9cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\AI">
+      <UniqueIdentifier>{dfbbbf33-74c4-4beb-8f0b-68245fc393f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\AI\State">
+      <UniqueIdentifier>{1a0e0377-def6-45f0-8506-6332e0389af4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\AI\Transition">
+      <UniqueIdentifier>{27f42a09-72a6-45c0-8ec9-8e46f877cbeb}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -26,13 +41,13 @@
       <Filter>Main</Filter>
     </ClCompile>
     <ClCompile Include="Source\Grid.cpp">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
     <ClCompile Include="Source\Region.cpp">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
     <ClCompile Include="Source\WorldMapUIRect.cpp">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClCompile>
     <ClCompile Include="Source\LocalMap.cpp">
       <Filter>Source Files\LocalMap</Filter>
@@ -40,28 +55,100 @@
     <ClCompile Include="Source\WorldMap.cpp">
       <Filter>Source Files\WorldMap</Filter>
     </ClCompile>
+    <ClCompile Include="Source\MenuScene.cpp">
+      <Filter>Source Files\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\WorldScene.cpp">
+      <Filter>Source Files\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\LocalScene.cpp">
+      <Filter>Source Files\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Building.cpp">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Tree.cpp">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Grass.cpp">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\IdleState.cpp">
+      <Filter>Source Files\AI\State</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\TransitionToWander.cpp">
+      <Filter>Source Files\AI\Transition</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\WanderState.cpp">
+      <Filter>Source Files\AI\State</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\TransitionToIdle.cpp">
+      <Filter>Source Files\AI\Transition</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\MapGenerator.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Source\Grid.h">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Source\HeightBiomes.h">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Source\Region.h">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Source\WorldMapUIRect.h">
-      <Filter>Source Files\Other</Filter>
+      <Filter>Source Files\Utility</Filter>
     </ClInclude>
     <ClInclude Include="Source\LocalMap.h">
       <Filter>Source Files\LocalMap</Filter>
     </ClInclude>
     <ClInclude Include="Source\WorldMap.h">
       <Filter>Source Files\WorldMap</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\BiomeColors.h">
+      <Filter>Source Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TileSet.h">
+      <Filter>Source Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\MenuScene.h">
+      <Filter>Source Files\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\WorldScene.h">
+      <Filter>Source Files\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\LocalScene.h">
+      <Filter>Source Files\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Scene.h">
+      <Filter>Source Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Building.h">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Tree.h">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Grass.h">
+      <Filter>Source Files\StaticMapElement</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\StaticMapElement.h">
+      <Filter>Source Files\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\IdleState.h">
+      <Filter>Source Files\AI\State</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TransitionToWander.h">
+      <Filter>Source Files\AI\Transition</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\WanderState.h">
+      <Filter>Source Files\AI\State</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TransitionToIdle.h">
+      <Filter>Source Files\AI\Transition</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

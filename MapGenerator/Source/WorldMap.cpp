@@ -1,6 +1,7 @@
 #include "WorldMap.h"
 #include "Grid.h"
 #include "HeightBiomes.h"
+#include "BiomeColors.h"
 #include "Region.h"
 
 #include <Random.h>
@@ -8,6 +9,7 @@
 #include <FreeFunctions.h>
 #include <PerlinNoise.h>
 #include <SimpleMath.h>
+#include <LuaEmbed.h>
 
 #include <vector>
 #include <stack>
@@ -32,13 +34,16 @@ constexpr float kMaxPersistence = 1.f;
 constexpr int kMinAreaTileCount = 100;
 constexpr int kMinSplitSize = 20;
 
-constexpr int kLocalHeightLevel = 12;
-constexpr int kCitySize = 4;
+constexpr int kLocalHeightLevel = 10;
+constexpr int kMaxCitySize = 8;
+constexpr int kMinCitySize = 4;
 constexpr int kMaxTryToFindCity = 10;
-constexpr int kCityDistanceMin2 = 210;
+constexpr int kCityDistanceMin2 = 400;
 
 constexpr float kMaxFloat = std::numeric_limits<float>::max();
 constexpr int kMaxInt = std::numeric_limits<int>::max();
+
+constexpr float kGScoreMagnitude = 700.f;
 
 WorldMap::WorldMap(int width, int height, int tileSize)
     : m_mapW{ width / tileSize }
@@ -52,9 +57,14 @@ WorldMap::WorldMap(int width, int height, int tileSize)
 {
     m_pGrid = new Grid;
     m_pGrid->Init(m_mapW,m_mapH, m_tileSize);
+
     m_pRootRegion = new Region();
+    // top left
     m_pRootRegion->m_region.first = { m_pGrid->GetTile(0)->x, m_pGrid->GetTile(0)->y };
+    // bottom right
     m_pRootRegion->m_region.second = { m_pGrid->GetLastTile()->x, m_pGrid->GetLastTile()->y };
+
+    ResetPathNode();
 }
 
 WorldMap::~WorldMap()
@@ -104,6 +114,7 @@ void WorldMap::GenerateBasicHeightNoise()
         pTile->rawNoise /= totalAmplitude;
         pTile->heightNoise = pTile->rawNoise;
     }
+    delete[] seedForEachOctave;
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -225,7 +236,7 @@ void WorldMap::DrawHeightNoise()
     }
 }
 
-void WorldMap::DrawHeightBiome()
+void WorldMap::DrawWorld()
 {
     for (int i = 0; i < m_pGrid->Size(); ++i)
     {
@@ -233,23 +244,138 @@ void WorldMap::DrawHeightBiome()
 
         switch (pTile->type)
         {
-        case Tile::Type::Empty: DrawRect(pTile->rect, PickColor(pTile->heightNoise)); break;
-        case Tile::Type::City:
-        case Tile::Type::CityRoad: DrawRect(pTile->rect, E2::Red::kRed); break;
-        case Tile::Type::Road:DrawRect(pTile->rect, E2::Red::kPink); break;
+        case Tile::Type::Empty: DrawRect(pTile->rect, pTile->biomeColor); break;
+        case Tile::Type::City: DrawRect(pTile->rect, pTile->biomeColor); break;
+        case Tile::Type::Road: DrawRect(pTile->rect, E2::Yellow::kDarkYellow); break;
         }
     }
+
+    auto townIcon = GetEngine().CreateTexture("Assets/UI/TownIcon.png");
+    E2::Rect rect; 
+    int xCoord = 0;
+    int yCoord = 0;
+    int citySize = 0;
+    for (auto* pTile : m_cities)
+    {
+        xCoord = pTile->rect.x - (pTile->citySize * pTile->rect.w);
+        yCoord = pTile->rect.y - (pTile->citySize * pTile->rect.h);
+        citySize = pTile->rect.w * (pTile->citySize * 2);
+        rect = { xCoord,yCoord,citySize,citySize };
+        DrawTexture(townIcon,nullptr,&rect);
+    }
+}
+
+void WorldMap::GenerateTemperatureNoise(int equatorLine, int complexity)
+{
+    float longSide = (float)((m_pGrid->GetColumn() > m_pGrid->GetRow()) ? m_pGrid->GetColumn() : m_pGrid->GetRow());
+    size_t seed = E2::Random();
+    //generate basic perlin
+    float low = 1.f;
+    float high = 0;
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+        
+        float dx = (float)pTile->x / longSide;
+        float dy = (float)pTile->y / longSide;
+        auto rawNoise = PerlinNoise::Perlin(dx* complexity, dy* complexity, seed);    //[-1,1]
+        rawNoise = rawNoise / 2 + 0.5f;     //[0,1]
+        pTile->rawTemperature = rawNoise;
+        if (pTile->rawTemperature < low)
+        {
+            low = pTile->rawTemperature;
+        }
+        else if(pTile->rawTemperature > high)
+        {
+            high = pTile->rawTemperature;
+        }
+    }
+
+    //re-distribute perlin, and tweek temperature
+    float range = high - low;
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+        //re-distribute noise to the range [0,1] evenly
+        auto newValue = E2::Lerp(0,1.f, (pTile->rawTemperature - low)/ range);
+
+        //actual temperature
+        //the weight is the distance to the equator
+        float weight = 0;
+        if (pTile->rect.y < equatorLine)
+        {
+            //north hemisphere
+            weight = (float)pTile->rect.y / (float)equatorLine;
+        }
+        else
+        {
+            //south hemisphere
+            weight = 2.f - ((float)pTile->rect.y / (float)equatorLine) ;
+        }
+        weight = E2::SmoothStep(weight);
+        pTile->rawTemperature = weight * newValue;
+    }
+}
+
+void WorldMap::DrawTemperature()
+{
+    E2::Color color;
+
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+
+        float hue = E2::Lerp(0,230, 1.f - (pTile->rawTemperature));
+        color = E2::Color_hsva(hue,1,1);
+        DrawRect(pTile->rect, color);
+    }
+}
+
+void WorldMap::GenerateBiome(const char* pBiomeData)
+{
+    lua_State* pLua = luaL_newstate();
+    luaL_openlibs(pLua);
+    if (E2::CheckLua(pLua, (int)luaL_dofile(pLua, pBiomeData)))
+    {
+        for (int i = 0; i < m_pGrid->Size(); ++i)
+        {
+            auto* pTile = m_pGrid->GetTile(i);
+            //lua pops the function (and the args)after it's called so I have to recall it 
+            lua_getglobal(pLua, "GetBiomeData");
+            if (lua_isfunction(pLua, -1))
+            {
+                lua_pushnumber(pLua, pTile->heightNoise);   /* push 1st argument */
+                lua_pushnumber(pLua, pTile->rawTemperature);   /* push 2nd argument */
+
+                // 2 argument, 4 return values
+                if (E2::CheckLua(pLua, lua_pcall(pLua, 2, 4, 0)))
+                {
+                    /* retrieve result */
+                    pTile->biomeId = (int)lua_tonumber(pLua, -4);
+                    assert((pTile->biomeId > 0) && "biomeId must exist");
+                    pTile->biomeColor.r = (uint8_t)lua_tonumber(pLua, -3);
+                    pTile->biomeColor.g = (uint8_t)lua_tonumber(pLua, -2);
+                    pTile->biomeColor.b = (uint8_t)lua_tonumber(pLua, -1);
+                    lua_pop(pLua, 4);  /* pop returned value */
+                }
+            }
+        }
+    }
+    lua_close(pLua);
 }
 
 ////////////////////////////////////////////////////////////////////////
 // Randomly choose a region and split it once
 ////////////////////////////////////////////////////////////////////////
-void WorldMap::SplitRegion()
+void WorldMap::SplitRegion(size_t times)
 {
-    auto availableNodes = Region::FindSplittableRegions(m_pRootRegion);
-    // TODO: make weighted random
-    auto choice = E2::Random(0, availableNodes.size() - 1);
-    availableNodes[choice]->Split(kMinAreaTileCount,kMinSplitSize);
+    for (size_t i = 0; i < times; ++i)
+    {
+        auto availableNodes = Region::FindSplittableRegions(m_pRootRegion);
+        // TODO: make weighted random
+        auto choice = E2::Random(0, availableNodes.size() - 1);
+        availableNodes[choice]->Split(kMinAreaTileCount, kMinSplitSize);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -340,7 +466,17 @@ void WorldMap::FoundCity(float minHeight, float maxHeight)
             if (pTile)
             {
                 m_cities.push_back(pTile);
-                ExpandCityTiles(pTile, kCitySize);
+                if (E2::RandomBool(2))
+                {
+                    pTile->citySize = kMinCitySize;
+                    ExpandCityTiles(pTile, kMinCitySize);
+                }
+                else
+                {
+                    pTile->citySize = kMaxCitySize;
+                    ExpandCityTiles(pTile, kMaxCitySize);
+                }
+                
                 --cityToFound;
             }
             
@@ -441,7 +577,8 @@ void WorldMap::BuildRoads()
     {
         for (auto id : m_cityAdjacencyList[i])
         {
-            FindPath(m_cities[i], m_cities[id]);
+            FindPath(m_cities[i]->id, m_cities[id]->id);
+            ResetPathNode();
         }
     }
 }
@@ -464,129 +601,136 @@ float WorldMap::RegionEmptiness(int regionTileCount, int slope)
 ////////////////////////////////////////////////////////////////////////
 // Path finding for cities, using A*
 ////////////////////////////////////////////////////////////////////////
-void WorldMap::FindPath(Tile* pStart, Tile* pEnd)
+void WorldMap::FindPath(PathNodeId start, PathNodeId end)
 {
-    if (!(pStart && pEnd))
-    {
-        return;
-    }
-    std::unordered_map<int,PathNode*> testedNodes;
-    PathNode* pStartNode = new PathNode{ pStart,kMaxFloat,kMaxFloat,nullptr };
-    PathNode* pEndNode = new PathNode{ pEnd,kMaxFloat,kMaxFloat,nullptr };
-    testedNodes.emplace(pStartNode->m_pTile->id, pStartNode);
-    testedNodes.emplace(pStartNode->m_pTile->id, pEndNode);
+    std::vector<PathNodeId> testedNodeId;
+    
+    testedNodeId.push_back(start);
+    testedNodeId.push_back(end);
 
-    auto comp = [](PathNode* left, PathNode* right)
+    auto comp = [this](PathNodeId left, PathNodeId right)
     {
-        return left->m_fScore > right->m_fScore;
+        return m_pathNodes[left].m_fScore > m_pathNodes[right].m_fScore;
     };
 
-    auto getGScore = [](Tile* pCurrent, Tile* pStart, Tile* pEnd)
+    auto getGScore = [this](PathNodeId current, PathNodeId start, PathNodeId end)
     {
-        auto a = pCurrent->heightNoise - pStart->heightNoise;
-        auto b = pCurrent->heightNoise - pEnd->heightNoise;
-        return (std::fabs(a) + std::fabs(b)) * 700.f;
+        auto a = m_pGrid->GetTile(current)->heightNoise - m_pGrid->GetTile(start)->heightNoise;
+        auto b = m_pGrid->GetTile(current)->heightNoise - m_pGrid->GetTile(end)->heightNoise;
+        return (std::fabs(a) + std::fabs(b)) * kGScoreMagnitude;
     };
 
-    auto heuristic = [](Tile* pCurrent, Tile* pEnd)
+    auto heuristic = [this](PathNodeId current, PathNodeId end)
     {
-        auto deltaX = pCurrent->x - pEnd->x;
-        auto deltaY = pCurrent->y - pEnd->y;
+        auto deltaX = m_pGrid->GetTile(current)->x - m_pGrid->GetTile(end)->x;
+        auto deltaY = m_pGrid->GetTile(current)->y - m_pGrid->GetTile(end)->y;
         return deltaX * deltaX + deltaY * deltaY;
     };
 
-    std::priority_queue<PathNode*, std::vector<PathNode*>, decltype(comp)> openSet(comp);
-    std::unordered_map<Tile*,bool> closeSet;
-
-    auto testNeighbor = [&](Tile* pTile, PathNode* pCurrent)
+    auto findId = [](std::vector<PathNodeId>& container, PathNodeId inId)->bool
     {
-        if (pTile && closeSet.find(pTile) == closeSet.end())
+        for (auto& id : container)
+        {
+            if (id == inId)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::priority_queue<PathNodeId, std::vector<PathNodeId>, decltype(comp)> openSet(comp);
+    std::vector<PathNodeId> closeSet;
+
+    auto testNeighbor = [this,&findId,&closeSet,&heuristic,&getGScore,&testedNodeId,&openSet](PathNodeId neighborNodeId, PathNodeId currentNodeId, PathNodeId startNodeId, PathNodeId endNodeId)
+    {
+        auto* pNeighborTile = m_pGrid->GetTile(neighborNodeId);
+        assert(pNeighborTile);
+        // if this neighbor is closed
+        if (!findId(closeSet, neighborNodeId))
         {
             float gNew = 0.f;
             float hNew = 0.f;
             float fNew = 0.f;
-            if (pTile->type == Tile::Type::Road|| pTile->type == Tile::Type::City)
+            if (pNeighborTile->type == Tile::Type::Road || pNeighborTile->type == Tile::Type::City)
             {
-                
+                // TODO
             }
             else
             {
-                gNew = pCurrent->m_gScore + getGScore(pTile, pStartNode->m_pTile, pEndNode->m_pTile);
-                hNew = (float)heuristic(pTile, pEndNode->m_pTile);
+                gNew = m_pathNodes[currentNodeId].m_gScore + getGScore(currentNodeId, startNodeId, endNodeId);
+                hNew = (float)heuristic(currentNodeId, endNodeId);
                 fNew = gNew + hNew;
             }
             
-            //not tested yet
-            if (testedNodes.find(pTile->id) == testedNodes.end())
-            {
-                testedNodes.emplace(pTile->id, new PathNode{ pTile ,gNew,fNew,pCurrent });
-                openSet.push(testedNodes[pTile->id]);
-            }
             //if tested, relax
-            else if (testedNodes[pTile->id]->m_fScore > fNew)
+            if (findId(testedNodeId, neighborNodeId))
             {
-                testedNodes[pTile->id]->m_gScore = gNew;
-                testedNodes[pTile->id]->m_fScore = fNew;
-                testedNodes[pTile->id]->m_cameFrom = pCurrent;
-                openSet.push(testedNodes[pTile->id]);
+                if (m_pathNodes[neighborNodeId].m_fScore > fNew)
+                {
+                    m_pathNodes[neighborNodeId].m_gScore = gNew;
+                    m_pathNodes[neighborNodeId].m_fScore = fNew;
+                    m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                    openSet.push(neighborNodeId);
+                }
+            }
+            //not tested yet
+            else
+            {
+                testedNodeId.push_back(neighborNodeId);
+                m_pathNodes[neighborNodeId].m_gScore = gNew;
+                m_pathNodes[neighborNodeId].m_fScore = fNew;
+                m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                openSet.push(neighborNodeId);
             }
         }
     };
 
-    pStartNode->m_gScore = 0;
-    pStartNode->m_fScore = (float)heuristic(pStartNode->m_pTile, pEndNode->m_pTile);
-    openSet.push(pStartNode);
+    m_pathNodes[start].m_gScore = 0;
+    m_pathNodes[start].m_fScore = (float)heuristic(start, end);
+    openSet.push(start);
 
 
-    while(openSet.top()->m_pTile != pEnd)
+    while(!(openSet.empty()||openSet.top()== end))
     {
-        auto* pCurrent = openSet.top();
-        closeSet[pCurrent->m_pTile]= true;
+        auto current = openSet.top();
+        closeSet.push_back(current);
         openSet.pop();
         // find neighbors
-        auto* pNorthTile = m_pGrid->GetNeighborTile(pCurrent->m_pTile,Grid::Direction::North);
-        testNeighbor(pNorthTile, pCurrent);
+        auto* pCurrentTile = m_pGrid->GetTile(current);
+        auto* pNorthTile = m_pGrid->GetNeighborTile(pCurrentTile,Grid::Direction::North);
+        if(pNorthTile)
+        testNeighbor(pNorthTile->id, current, start, end);
 
-        auto* pSouthTile = m_pGrid->GetNeighborTile(pCurrent->m_pTile, Grid::Direction::South);
-        testNeighbor(pSouthTile, pCurrent);
+        auto* pSouthTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::South);
+        if (pSouthTile)
+        testNeighbor(pSouthTile->id, current, start, end);
 
-        auto* pEastTile = m_pGrid->GetNeighborTile(pCurrent->m_pTile, Grid::Direction::East);
-        testNeighbor(pEastTile, pCurrent);
+        auto* pEastTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::East);
+        if (pEastTile)
+        testNeighbor(pEastTile->id, current, start, end);
 
-        auto* pWestTile = m_pGrid->GetNeighborTile(pCurrent->m_pTile, Grid::Direction::West);
-        testNeighbor(pWestTile, pCurrent);
-
-#ifdef _DEBUG
-        DrawRect(pCurrent->m_pTile->rect, E2::Red::kPink);
-        GetEngine().ForceRender();
-#endif // _DEBUG
+        auto* pWestTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::West);
+        if (pWestTile)
+        testNeighbor(pWestTile->id, current, start, end);
     }
 
-    auto* pNode = openSet.top();
-    while (pNode)
+    // reconstruct path, it is reversed but it's ok
+    auto nodeId = openSet.top();
+    while (nodeId != -1)
     {
-        if (pNode->m_pTile->type == Tile::Type::City)
+        auto* pTile = m_pGrid->GetTile(nodeId);
+        if (pTile->type == Tile::Type::City)
         {
-            
+            //
         }
         else
         {
-            pNode->m_pTile->type = Tile::Type::Road;
+            pTile->type = Tile::Type::Road;
         }
-        m_roads.push_back(pNode->m_pTile);
-        pNode = pNode->m_cameFrom;
+        m_roads.push_back(pTile);
+        nodeId = m_pathNodes[nodeId].m_cameFrom;
     }
-
-    while (!openSet.empty())
-    {
-        openSet.pop();
-    }
-
-    for (auto [f, s] : testedNodes)
-    {
-        delete s;
-    }
-    testedNodes.clear();
 }
 
 void WorldMap::ExpandCityTiles(Tile* pCenter, int range)
@@ -609,88 +753,44 @@ void WorldMap::ExpandCityTiles(Tile* pCenter, int range)
     }
 }
 
-void WorldMap::DrawCities()
-{
-    for (auto* pTile : m_cities)
-    {
-        E2::Rect city{ pTile->rect.x - kCitySize * pTile->rect.w
-                      ,pTile->rect.y - kCitySize * pTile->rect.w
-                      ,(kCitySize * 2 + 1) * pTile->rect.w
-                      ,(kCitySize * 2 + 1) * pTile->rect.h };
-
-        DrawRect(city, E2::Red::kRed);
-    }
-}
-
-void WorldMap::DrawRoads()
-{
-    for (auto* pTile : m_roads)
-    {
-        DrawRect(pTile->rect,E2::Red::kPink);
-    }
-}
-
 ////////////////////////////////////////////////////////////////////////
 // MISC.
 ////////////////////////////////////////////////////////////////////////
-const E2::Color& WorldMap::PickColor(float noise)
+
+
+void WorldMap::ResetPathNode()
 {
-    if (noise < kDeepWater)
+    if (m_pathNodes.size()!= m_pGrid->Size())
     {
-        return E2::Blue::kNavy;
-    }
-    else if (noise < kShallowWater)
-    {
-        return E2::Blue::kRoyalBlue;
-    }
-    else if (noise < kBeach)
-    {
-        return E2::Yellow::kLemon;
-    }
-    else if (noise < kSwamp)
-    {
-        return E2::Red::kRedWood;
-    }
-    else if (noise < kGrass)
-    {
-        return E2::Green::kLightGreen;
-    }
-    else if (noise < kForest)
-    {
-        return E2::Green::kForest;
-    }
-    else if (noise < kJungle)
-    {
-        return E2::Green::kYellowGreen;
-    }
-    else if (noise < kSavannah)
-    {
-        return E2::Green::kOlive;
-    }
-    else if (noise < kTundra)
-    {
-        return E2::Red::kTuscan;
-    }
-    else if (noise < kRock)
-    {
-        return E2::Red::kApricot;
+        bool firstInit = m_pathNodes.empty();
+        assert(firstInit);
+
+        m_pathNodes = std::vector<PathNode>(m_pGrid->Size());
     }
     else
     {
-        return E2::Mono::kWhite;
+        for (int i = 0; i < m_pGrid->Size(); ++i)
+        {
+            m_pathNodes[i].m_gScore = kMaxFloat;
+            m_pathNodes[i].m_fScore = kMaxFloat;
+            m_pathNodes[i].m_cameFrom = -1;
+        }
     }
 }
 
 void WorldMap::Reset()
 {
-    delete m_pRootRegion;
-    m_pRootRegion = new Region();
-    m_pRootRegion->m_region.first = { m_pGrid->GetTile(0)->x, m_pGrid->GetTile(0)->y };
-    m_pRootRegion->m_region.second = { m_pGrid->GetLastTile()->x, m_pGrid->GetLastTile()->y };
-
+    if (m_pRootRegion)
+    {
+        delete m_pRootRegion;
+        m_pRootRegion = new Region();
+        m_pRootRegion->m_region.first = { m_pGrid->GetTile(0)->x, m_pGrid->GetTile(0)->y };
+        m_pRootRegion->m_region.second = { m_pGrid->GetLastTile()->x, m_pGrid->GetLastTile()->y };
+    }
     m_cities.clear();
     m_roads.clear();
     m_pGrid->ClearObjects();
+    ResetPathNode();
 }
 
 Tile* WorldMap::GetTile(int x, int y)
@@ -716,9 +816,6 @@ void WorldMap::ChangeOctave(int delta)
     m_currentOctaves += delta;
     m_currentOctaves = E2::Clamp<int>(0, kMaxOctaves, m_currentOctaves);
 }
-
-
-
 
 void WorldMap::DoSurvey()
 {

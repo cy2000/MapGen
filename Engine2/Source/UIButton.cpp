@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "UIButton.h"
 #include "UIRect.h"
+#include "CallBack.h"
 
 E2::UIButton::UIButton(const Color& upColor, const Color& downColor, const Color& overColor)
     : m_isSelected{false}
@@ -21,6 +22,14 @@ E2::UIButton::UIButton(const Color& upColor, const Color& downColor, const Color
         UIRect* box = new UIRect(downColor, true, false);
         box->SetDimension({ UICoordType::Percentage, 1 }, { UICoordType::Percentage, 1 });
         AddStateElement(UIButton::State::Down, box);
+    }
+}
+E2::UIButton::~UIButton()
+{
+    if (m_pCallBack)
+    {
+        delete m_pCallBack;
+        m_pCallBack = nullptr;
     }
 }
 void E2::UIButton::OnRollOver()
@@ -53,6 +62,11 @@ void E2::UIButton::OnClick()
 
     if (m_pOnClickCallBack)
         m_pOnClickCallBack();
+
+    if (m_pCallBack)
+    {
+        m_pCallBack->Call();
+    }
 }
 void E2::UIButton::OnReleaseOutside()
 {
@@ -60,16 +74,12 @@ void E2::UIButton::OnReleaseOutside()
     if (!m_isSelected)
         ChangeState(State::Up);
 }
-void E2::UIButton::OnNotify(Event* event)
+void E2::UIButton::OnNotify(Event evt)
 {
-    if (event->m_type == EventType::MouseButtonUpEvent)
+    auto* pElement = HitTest({ evt.m_mouseEvent.x, evt.m_mouseEvent.y });
+    if (pElement)
     {
-        auto* p = static_cast<MouseClickEvent*>(event);
-        auto* pElement = HitTest({ p->x, p->y });
-        if (pElement)
-        {
-            pElement->OnClick();
-        }
+        pElement->OnClick();
     }
 }
 void E2::UIButton::AddStateElement(State state, UIElement* pElement)
@@ -112,4 +122,9 @@ void E2::UIButton::ChangeState(State state)
 void E2::UIButton::SetCallBack(void(*pCallBack)())
 {
     m_pOnClickCallBack = pCallBack;
+}
+
+void E2::UIButton::SetCallBack(CallBack* pCallBack)
+{
+    m_pCallBack = std::move(pCallBack);
 }

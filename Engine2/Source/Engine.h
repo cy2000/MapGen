@@ -2,14 +2,18 @@
 #include "IGame.h"
 #include "Device.h"
 #include "ResourceManager.h"
+#include "GameObjectManager.h"
 #include "UIManager.h"
 #include "EventManager.h"
+#include "ScriptManager.h"
 #include "Keyboard.h"
 #include "Mouse.h"
 #include "Color.h"
 #include "Rect.h"
 #include "Vector2.h"
 #include "Event.h"
+#include "Timer.h"
+#include "TryCast.h"
 #include <unordered_map>
 
 namespace E2
@@ -23,10 +27,17 @@ namespace E2
         ResourceManager m_resourceManager;
         EventManager m_eventManger;
         UIManager m_UIManager;
+        GameObjectManager m_gameObjectManager;
+
+        ScriptManager m_scriptManager;
+        Timer m_timer;
+
+        GameSetting m_gameSetting;
 
         bool m_quit;
         bool m_manuallyUpdate;
         bool m_canUpdate;
+        bool m_showStatus;
     public:
         //Engine Control//////////////////////////////////////////
         static Engine& Get();
@@ -35,6 +46,9 @@ namespace E2
         Vector2 GetWindowSize();
         void ToggleManuallyUpdate();
         void UpdateOnce() { m_canUpdate = true; }
+        void PrintFPS(float deltaTime);
+        void ToggleEngineShowStatus() { m_showStatus = !m_showStatus; }
+        void DestroyTexture(E2::Texture& texture);
 
         //Input//////////////////////////////////////////
         void SetKeyState(Keyboard::Key key, bool state) { m_keyboard.SetState(key, state); }
@@ -45,6 +59,7 @@ namespace E2
         bool IsAnyMouseButtonPressed() { return m_mouse.IsAnyButtonPressed(); }
         bool IsAnyKeyPressed() { return m_keyboard.IsAnykeyPressed(); }
         bool IsKeyPressed(Keyboard::Key key) { return m_keyboard.IsKeyPressed(key); }
+        bool IsKeyDown(Keyboard::Key key) { return m_keyboard.IsKeyDown(key); }
         const Keyboard::Key GetLastKeyPressed() const { return m_keyboard.GetLastKeyPressed(); }
 
         //Graphics//////////////////////////////////////////
@@ -55,7 +70,9 @@ namespace E2
         void DrawImageFromMem(std::byte* pSource, size_t size, Rect* pSrc, Rect* pDest); //bad
         void DrawTexture(Texture& texture, Rect* pSrc, Rect* pDest);
         Texture CreateTexture(const char* path);
-        void ForceRender();
+        Texture CombineCurrentView();
+        void RenderNow();
+        void CleanRenderer();
 
         //FileIO//////////////////////////////////////////
         bool LoadFile(const char* path);
@@ -63,9 +80,9 @@ namespace E2
         size_t GetResourceSize(const char* path);
 
         //Event//////////////////////////////////////////
-        void RegisterListener(UIElement* pListener) { m_eventManger.AddUIListener(pListener); }
+        void RegisterListener(EventListener* pListener,const char* pEventType) { m_eventManger.AddListener(pListener, pEventType); }
         void ClearListener() { m_eventManger.ClearListener(); }
-        void Notify(Event* pEvent);
+        void Notify(Event evt);
 
         //UI
         void DrawUIFrame(bool b) { m_UIManager.WillDrawDebugFrame(b); }
@@ -73,11 +90,29 @@ namespace E2
         Texture CreateTextTexture(Font& font, std::string& text, Color color);
         void AddUIElement(UIElement* pElement);
         void ClearUI() { m_UIManager.ClearUI(); }
+        UIElement* GetUIElement(const char* pName);
+
+        //Lua
+        //Test
+        UIElement* Lua_LoadUIElement(const char* pPath);
+        bool LoadUI(const char* pPath);
+        bool LoadFilesFromScript(const char* pPath);
+        bool LoadGameSettings(const char* pPath);
+        
+        //GameObjects
+        void AddGameObject(GameObject* pObject) { m_gameObjectManager.AddGameObject(pObject); }
+        void DestroyGameObject(size_t id) { m_gameObjectManager.RemoveGameObject(id); }
+        void DestroyAllGameObject() { m_gameObjectManager.DestroyAll(); }
+
+        //Misc
+        const GameSetting& GetGameSetting() const { return m_gameSetting; }
+        float GetDeltaTime() const { return m_timer.DeltaTime(); }
 
     private:
         Engine();
-        bool Init(const GameInfo& info);
-        void Update(IGame& game,void (IGame::*pGameUpdate)());
+        bool Init(const char* pGameConfig);
+        void Update(IGame& game,void (IGame::*pGameUpdate)(float),float deltaTime);
         void ShutDown();
+        void ShowEngineStatus(float deltaTime);
     };
 }

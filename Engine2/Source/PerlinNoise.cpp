@@ -6,7 +6,6 @@
 
 #include <cmath>
 #include <iostream>
-constexpr float kPi = 3.1415926f;
 
 float PerlinNoise::Perlin(float x, float y , size_t seed)
 {
@@ -35,7 +34,7 @@ float PerlinNoise::DotGridGradient(int originX, int originY, float x, float y , 
     E2::Vector2f randomUnitVector = UnitGradient(originX, originY, seed);
     E2::Vector2f ourVector{x - (float)originX, y - (float)originY};
 
-    return randomUnitVector * ourVector;
+    return E2::Vector2f::Dot(randomUnitVector,ourVector);
 }
 
 // TODO: 'true' random doesn't work for gradient vector

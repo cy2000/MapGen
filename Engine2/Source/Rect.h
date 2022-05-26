@@ -4,9 +4,9 @@ namespace E2
 {
     struct Rect
     {
-        int x;
-        int y;
-        int w;
-        int h;
+        int x = 0;
+        int y = 0;
+        int w = 0;
+        int h = 0;
     };
 }

@@ -19,14 +19,22 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Align.cpp" />
     <ClCompile Include="Source\EventManager.cpp" />
     <ClCompile Include="Source\GameObject.cpp" />
+    <ClCompile Include="Source\GameObjectManager.cpp" />
+    <ClCompile Include="Source\ImageComponent.cpp" />
+    <ClCompile Include="Source\KinematicComponent.cpp" />
     <ClCompile Include="Source\Localization.cpp" />
     <ClCompile Include="Source\PerlinNoise.cpp" />
     <ClCompile Include="Source\Random.cpp" />
+    <ClCompile Include="Source\ScriptManager.cpp" />
+    <ClCompile Include="Source\SeekFlee.cpp" />
     <ClCompile Include="Source\ShapeComponent.cpp" />
     <ClCompile Include="Source\SquirrelNoise.cpp" />
+    <ClCompile Include="Source\StateComponent.cpp" />
     <ClCompile Include="Source\Texture.cpp" />
+    <ClCompile Include="Source\Timer.cpp" />
     <ClCompile Include="Source\TransformComponent.cpp" />
     <ClCompile Include="Source\UIButton.cpp" />
     <ClCompile Include="Source\UIImage.cpp" />
@@ -60,28 +68,45 @@
     <ClCompile Include="Source\UIElement.cpp" />
     <ClCompile Include="Source\UILabel.cpp" />
     <ClCompile Include="Source\UITextInput.cpp" />
+    <ClCompile Include="Source\VelocityMatch.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Align.h" />
+    <ClInclude Include="Source\CallBack.h" />
     <ClInclude Include="Source\Color.h" />
     <ClInclude Include="Source\Component.h" />
     <ClInclude Include="Source\Engine.h" />
     <ClInclude Include="Source\Event.h" />
+    <ClInclude Include="Source\EventListener.h" />
     <ClInclude Include="Source\EventManager.h" />
+    <ClInclude Include="Source\EventType.h" />
     <ClInclude Include="Source\Font.h" />
     <ClInclude Include="Source\FreeFunctions.h" />
     <ClInclude Include="Source\GameObject.h" />
+    <ClInclude Include="Source\GameObjectManager.h" />
     <ClInclude Include="Source\HashString.h" />
     <ClInclude Include="Source\IGame.h" />
+    <ClInclude Include="Source\ImageComponent.h" />
+    <ClInclude Include="Source\KinematicComponent.h" />
     <ClInclude Include="Source\Localization.h" />
+    <ClInclude Include="Source\LuaEmbed.h" />
     <ClInclude Include="Source\Mouse.h" />
     <ClInclude Include="Source\PerlinNoise.h" />
     <ClInclude Include="Source\Random.h" />
     <ClInclude Include="Source\Rect.h" />
+    <ClInclude Include="Source\ScriptManager.h" />
+    <ClInclude Include="Source\SeekFlee.h" />
     <ClInclude Include="Source\ShapeComponent.h" />
     <ClInclude Include="Source\SimpleMath.h" />
     <ClInclude Include="Source\SquirrelNoise.h" />
+    <ClInclude Include="Source\State.h" />
+    <ClInclude Include="Source\StateComponent.h" />
+    <ClInclude Include="Source\Steering.h" />
     <ClInclude Include="Source\Texture.h" />
+    <ClInclude Include="Source\Timer.h" />
     <ClInclude Include="Source\TransformComponent.h" />
+    <ClInclude Include="Source\Transition.h" />
+    <ClInclude Include="Source\TryCast.h" />
     <ClInclude Include="Source\UIButton.h" />
     <ClInclude Include="Source\UIImage.h" />
     <ClInclude Include="Source\UIManager.h" />
@@ -96,6 +121,7 @@
     <ClInclude Include="Source\Keyboard.h" />
     <ClInclude Include="Source\Macro.h" />
     <ClInclude Include="Source\pch.h" />
+    <ClInclude Include="Source\VelocityMatch.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -170,7 +196,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)External\Include\SDL\SDL\;$(ProjectDir)External\Include\SDL\SDL2_image\;$(ProjectDir)External\Include\SDL\SDL2_ttf\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)External\Include\SDL\SDL\;$(ProjectDir)External\Include\SDL\SDL2_image\;$(ProjectDir)External\Include\SDL\SDL2_ttf\;$(ProjectDir)External\Include\LUA\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4100;</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -179,8 +205,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalDependencies>SDL2.lib;SDL2_image.lib;SDL2_ttf.lib;</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SDL\SDL\;$(ProjectDir)External\Lib\SDL\SDL2_image\;$(ProjectDir)External\Lib\SDL\SDL2_ttf\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL2.lib;SDL2_image.lib;SDL2_ttf.lib;Lua54.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SDL\SDL\;$(ProjectDir)External\Lib\SDL\SDL2_image\;$(ProjectDir)External\Lib\SDL\SDL2_ttf\;$(ProjectDir)External\Lib\Lua\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
       <Command>robocopy "$(ProjectDir)External\Lib\SDL\SDL" "$(OutDir)." *.dll /z
@@ -198,7 +224,7 @@ exit 0</Command>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)External\SFML\Include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)External\SFML\Include\;$(ProjectDir)External\Include\LUA\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4100;</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -207,7 +233,7 @@ exit 0</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(ProjectDir)External\SFML\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SFML;$(ProjectDir)External\Lib\LUA\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='SDL_Release|x64'">
@@ -221,7 +247,7 @@ exit 0</Command>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)External\Include\SDL\SDL\;$(ProjectDir)External\Include\SDL\SDL2_image\;$(ProjectDir)External\Include\SDL\SDL2_ttf\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)External\Include\SDL\SDL\;$(ProjectDir)External\Include\SDL\SDL2_image\;$(ProjectDir)External\Include\SDL\SDL2_ttf\;$(ProjectDir)External\Include\LUA\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4100;</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -232,8 +258,8 @@ exit 0</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalDependencies>SDL2.lib;SDL2_image.lib;SDL2_ttf.lib;</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SDL\SDL\;$(ProjectDir)External\Lib\SDL\SDL2_image\;$(ProjectDir)External\Lib\SDL\SDL2_ttf\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SDL2.lib;SDL2_image.lib;SDL2_ttf.lib;Lua54.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SDL\SDL\;$(ProjectDir)External\Lib\SDL\SDL2_image\;$(ProjectDir)External\Lib\SDL\SDL2_ttf\;$(ProjectDir)External\Lib\Lua\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
     <PostBuildEvent>
       <Command>robocopy "$(ProjectDir)External\Lib\SDL\SDL" "$(OutDir)." *.dll /z
@@ -253,7 +279,7 @@ exit 0</Command>
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)External\SFML\Include\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)External\SFML\Include\;$(ProjectDir)External\Include\LUA\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4100;</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -264,7 +290,7 @@ exit 0</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <Lib>
-      <AdditionalLibraryDirectories>$(ProjectDir)External\SFML\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)External\Lib\SFML;$(ProjectDir)External\Lib\LUA\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
