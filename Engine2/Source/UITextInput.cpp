@@ -22,7 +22,7 @@ E2::UITextInput::UITextInput(Texture texture, Color& backGroundcolor)
     AddChild(m_pContents);
 }
 
-E2::UITextInput::UITextInput(Font font, Color& textColor, Color& backGroundcolor)
+E2::UITextInput::UITextInput(Font font, Color textColor, Color backGroundcolor)
     : m_isFocused{ false }
     , m_cursorIndex{ 0 }
     , m_text{}
@@ -72,7 +72,7 @@ void E2::UITextInput::OnKeyDown(E2::Keyboard::Key key)
     }
 }
 
-void E2::UITextInput::OnText(const char* pText)
+void E2::UITextInput::OnText(const char c)
 {
     if (!m_isFocused)
         return;
@@ -82,7 +82,7 @@ void E2::UITextInput::OnText(const char* pText)
         return;
     }
 
-    m_text.insert(m_cursorIndex, 1, pText[0]);
+    m_text.insert(m_cursorIndex, 1, c);
     ++m_cursorIndex;
     m_pContents->SetText(m_text);
 }
@@ -114,18 +114,14 @@ void E2::UITextInput::Draw()
     }
 }
 
-void E2::UITextInput::OnNotify(Event* pEvent)
+void E2::UITextInput::OnNotify(Event evt)
 {
     if (!m_isFocused)
         return;
-    if (pEvent->m_type == EventType::KeyBoardEvent)
-    {
-        auto* p = static_cast<KeyPressEvent*>(pEvent);
-        OnText(&(p->key));
-    }
+    OnText(evt.m_keyBoardEvent.key);
 }
 
-void E2::UITextInput::ReplaceText(std::string& text)
+void E2::UITextInput::ReplaceText(const std::string& text)
 {
     m_text = text;
     m_cursorIndex = (int)m_text.size();

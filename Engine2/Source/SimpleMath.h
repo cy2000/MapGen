@@ -1,7 +1,14 @@
 #pragma once
+#include "Vector2.h"
+constexpr float kPi = 3.1415926535f;
 
 namespace E2
 {
+    inline Vector2f Lerp(Vector2f min, Vector2f max, float weight)
+    {
+        return  min*(1 - weight) + max * weight;
+    }
+
     inline float Lerp(float min, float max, float weight)
     {
         return  (1 - weight) * min + weight * max;

@@ -5,9 +5,9 @@ namespace E2
 {
     struct Color
     {
-        uint8_t r;
-        uint8_t g;
-        uint8_t b;
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
         uint8_t a = 255;
     };
 
@@ -104,4 +104,6 @@ namespace E2
             static_cast<uint8_t>(0xFF * alpha)
         };
     }
+
+
 }

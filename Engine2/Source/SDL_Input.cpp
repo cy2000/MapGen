@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Engine.h"
 #include "Event.h"
+#include "EventType.h"
+
+
 
 static E2::Keyboard::Key TranslateScancode(SDL_Scancode code)
 {
@@ -26,6 +29,10 @@ static E2::Keyboard::Key TranslateScancode(SDL_Scancode code)
         case SDL_SCANCODE_LCTRL: return E2::Keyboard::Key::LeftCtrl; break;
         case SDL_SCANCODE_LSHIFT: return E2::Keyboard::Key::LeftShift; break;
 
+        case SDL_SCANCODE_F1: return E2::Keyboard::Key::F1; break;
+        case SDL_SCANCODE_F2: return E2::Keyboard::Key::F2; break;
+        case SDL_SCANCODE_F3: return E2::Keyboard::Key::F3; break;
+
         default: assert("Key missing!\n"); return E2::Keyboard::Key::KeyCodeMax; break;
         }
     }
@@ -50,7 +57,6 @@ void E2::Device::ProcessInput()
         switch (event.type)
         {
         case SDL_QUIT: E2::Engine::Get().Quit(); break;
-
         case SDL_KEYDOWN:
             E2::Engine::Get().SetKeyState(TranslateScancode(event.key.keysym.scancode), true);
             break;
@@ -60,15 +66,15 @@ void E2::Device::ProcessInput()
 
         case SDL_TEXTINPUT:
         {
-            KeyPressEvent evt{ EventType::KeyBoardEvent,event.text.text[0] };
-            E2::Engine::Get().Notify(&evt);
+            Event evt{};
+            evt.m_eventType = std::hash<std::string>{}(std::string(kKeyBoardEvent));;
+            evt.m_keyBoardEvent = { event.text.text[0] };
+            E2::Engine::Get().Notify(evt);
             break;
         }
         case SDL_MOUSEMOTION:
         {
             Engine::Get().SetMousePos(event.motion.x, event.motion.y);
-            MouseMoveEvent evt{ EventType::MouseMovementEvent,event.motion.x, event.motion.y };
-            E2::Engine::Get().Notify(&evt);
             break;
         }
         case SDL_MOUSEBUTTONDOWN:
@@ -78,8 +84,10 @@ void E2::Device::ProcessInput()
         case SDL_MOUSEBUTTONUP:
         {
             E2::Engine::Get().SetMouseState(TranslateMouseButton(event.button.button), false);
-            MouseClickEvent evt{ EventType::MouseButtonUpEvent,event.motion.x, event.motion.y, event.button.button };
-            E2::Engine::Get().Notify(&evt);
+            Event evt{};
+            evt.m_eventType = std::hash<std::string>{}(std::string(kMouseEvent));
+            evt.m_mouseEvent = { event.motion.x, event.motion.y, event.button.button };
+            E2::Engine::Get().Notify(evt);
             break;
         }
         default: break;

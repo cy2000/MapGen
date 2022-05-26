@@ -6,12 +6,12 @@
 #include "Color.h"
 
 #include <cmath>
-
-constexpr float kToRadian = 0.017453f; // Pi / 180
+#include <iostream>
 
 E2::ShapeComponent::ShapeComponent(GameObject* pOwner)
     : m_pOwner{pOwner}
 {
+    m_type = ComponentType::Image;
 }
 
 E2::ShapeComponent::~ShapeComponent()
@@ -21,38 +21,30 @@ E2::ShapeComponent::~ShapeComponent()
 
 void E2::ShapeComponent::Update(float deltaTime)
 {
-    //apply rotation first
-    auto dimension = m_pOwner->GetTransform()->GetDimension();
-    //find the center of owner
-    E2::Vector2f center = dimension / 2;
-    //convert angle to ragians
-    auto rot = m_pOwner->GetTransform()->GetRotation() * kToRadian;
-    //rotate each vertex from the center
-    for (int i = 0; i < m_vertices.size(); ++i)
-    {
-        auto newX = m_vertices[i].x - center.x;
-        auto newY = m_vertices[i].y - center.y;
-        auto rotX = newX * std::cos(rot) - newY * std::sin(rot);
-        auto rotY = newX * std::sin(rot) + newY * std::cos(rot);
-        m_vertexPositions[i].x = (int)rotX;
-        m_vertexPositions[i].y = (int)rotY;
-    }
+    auto* pTransform = m_pOwner->GetTransform();
+    float rot = pTransform->GetRotation();
+    auto pos = pTransform->GetCenter();
 
-    //translate all the vertices to the position of owner 
-    auto pos = m_pOwner->GetTransform()->GetPosition();
+    auto halfW = pTransform->GetDimension().x/2;
+    auto halfH = pTransform->GetDimension().y/2;
+    //rotate each vertex and move to object position
     for (int i = 0; i < m_vertices.size(); ++i)
     {
-        m_vertexPositions[i].x = (int)pos.x + m_vertexPositions[i].x;
-        m_vertexPositions[i].y = (int)pos.y + m_vertexPositions[i].y;
+        auto newX = m_vertices[i].x - halfW;
+        auto newY = m_vertices[i].y - halfH;
+        auto rotX = -newX * std::cos(rot) + newY * std::sin(rot);
+        auto rotY = newX * std::sin(rot) + newY * std::cos(rot);
+
+        m_vertexPositions[i].x = (int)rotX + (int)pos.x;
+        m_vertexPositions[i].y = (int)rotY + (int)pos.y;
     }
-    
 }
 
 void E2::ShapeComponent::Draw()
 {
     for (auto& edge : m_edges)
     {
-        E2::Engine::Get().DrawLine(m_vertexPositions[edge.x], m_vertexPositions[edge.y],E2::Mono::kWhite);
+        E2::Engine::Get().DrawLine(m_vertexPositions[edge.x], m_vertexPositions[edge.y], m_color);
     }
 }
 

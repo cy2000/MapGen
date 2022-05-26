@@ -91,7 +91,7 @@ void E2::UILabel::Draw()
     }
     else
     {
-        E2::Rect rect{ m_realRegion.x, m_realRegion.y, m_stringTexture.dememsion.x, m_stringTexture.dememsion.y };
+        E2::Rect rect{ m_realRegion.x, m_realRegion.y, m_stringTexture.dimension.x, m_stringTexture.dimension.y };
         E2::Engine::Get().DrawTexture(m_stringTexture, nullptr, &rect);
     }
 }
@@ -130,7 +130,7 @@ void E2::UILabel::WordWrap()
     m_isWordWrapping = !m_isWordWrapping;
 }
 
-void E2::UILabel::SetText(std::string& newText)
+void E2::UILabel::SetText(const std::string& newText)
 {
     m_originalText = newText;
     if (!m_useBitMap)

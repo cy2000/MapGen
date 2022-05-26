@@ -1,5 +1,6 @@
 #include "Grid.h"
 #include <assert.h>
+#include <cmath>
 
 Grid::Grid()
     :m_maxX{0}
@@ -15,12 +16,13 @@ void Grid::Init(int maxX, int maxY, int tileSize)
 {
     m_maxX = maxX;
     m_maxY = maxY;
+    m_tileSize = tileSize;
     int id = 0;
     for (int y = 0; y < m_maxY; ++y)
     {
         for (int x = 0; x < m_maxX; ++x)
         {
-            m_tiles.emplace_back(Tile{ id,x,y,{x * tileSize, y * tileSize, tileSize, tileSize},{},0,0, Tile::Type::Empty });
+            m_tiles.emplace_back(Tile{ id,x,y,{x * tileSize, y * tileSize, tileSize, tileSize},{},0,0,0, Tile::Type::Empty });
             ++id;
         }
     }
@@ -38,8 +40,12 @@ Tile* Grid::GetTile(unsigned int index)
     }
 }
 
-Tile* Grid::GetTile(unsigned int x, unsigned int y)
+Tile* Grid::GetTile(int x, int y)
 {
+    if (x >= m_maxX || y>= m_maxY || x <0 || y<0)
+    {
+        return nullptr;
+    }
     return GetTile(x + y * m_maxX);
 }
 
@@ -74,5 +80,24 @@ void Grid::ClearObjects()
     for (auto& tile : m_tiles)
     {
         tile.type = Tile::Type::Empty;
+    }
+}
+
+//Return the index of the tile in this position, or -1 if none-exist
+int Grid::FindTile(E2::Vector2f position)
+{
+    int xCoord = std::lroundf(position.x);
+    int yCoord = std::lroundf(position.y);
+    int x = xCoord / m_tileSize;
+    int y = yCoord / m_tileSize;
+
+
+    if (x <0 || x > m_maxX || y <0 || y > m_maxY)
+    {
+        return -1;
+    }
+    else
+    {
+        return GetTile(x,y)->id;
     }
 }

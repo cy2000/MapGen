@@ -1,28 +1,29 @@
 #pragma once
 
-#include "Event.h"
+#include "EventListener.h"
 #include <vector>
-#include <utility>
-#include <type_traits>
-
+#include <unordered_map>
 namespace E2
 {
-    class UIElement;
     class EventManager
     {
     private:
         // TODO:DOESN'T WORK 
-        //std::vector<std::pair<UIElement*, void(UIElement::*)(Event*)>> m_UIEventListeners;
+        //std::vector<std::pair<UIElement*, void(UIElement::*)(Event*)>> m_UIEventListenerTest;
         // other type of listeners..
-        bool m_breakNow;    //hack
-        std::vector<UIElement*> m_UIEventListeners;
-        std::vector<UIElement*> m_ExecuteListeners;
+        bool m_reset = false;    //hack
+
+        std::unordered_map<size_t, std::vector<EventListener*>> m_eventListeners;
+
+
+
     public:
         EventManager();
         ~EventManager() = default;
-        void AddUIListener(UIElement* pElement);
-        void NotifyUI(Event* pEvent);
+        void AddListener(EventListener* pListener, const char* pEventType);
         void ClearListener();
+        void Notify(Event evt);
         void Update();
+
     };
 }

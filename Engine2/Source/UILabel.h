@@ -7,6 +7,16 @@
 
 namespace E2
 {
+    struct UILabelData : UIElementData
+    {
+        std::string content;
+        std::string font;
+        int fontSize = 0;
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
+    };
+
     class UILabel : public UIElement
     {
     public:
@@ -47,7 +57,7 @@ namespace E2
         void ChangeHorizontal();
         void ChangeVertical();
         void WordWrap();
-        void SetText(std::string& newText);
+        void SetText(const std::string& newText);
         const Font& GetFont() const { return m_font; }
 
     private:

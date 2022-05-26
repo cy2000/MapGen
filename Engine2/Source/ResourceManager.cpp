@@ -7,6 +7,12 @@
 E2::ResourceManager::~ResourceManager()
 {
     //m_resources.clear();
+
+    //Destroy all Textures
+    for (auto& [id, texture] : m_textures)
+    {
+        Engine::Get().DestroyTexture(texture);
+    }
 }
 
 bool E2::ResourceManager::Load(Path path)

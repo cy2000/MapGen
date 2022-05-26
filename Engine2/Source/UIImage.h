@@ -7,6 +7,18 @@
 
 namespace E2
 {
+    struct UIImageData : UIElementData
+    {
+        std::string texture;
+        Rect srcRect{};
+        Rect destRect{};
+        bool isSliced = false;
+        float leftSlice = 0;
+        float rightSlice = 0;
+        float topSlice = 0;
+        float bottomSlice = 0;
+    };
+
     class UIImage : public UIElement
     {
     private:

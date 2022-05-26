@@ -2,35 +2,27 @@
 
 namespace E2
 {
-    enum class EventType : uint8_t
+    struct KeyBoardEvent
     {
-        KeyBoardEvent,
-        MouseButtonDownEvent,
-        MouseButtonUpEvent,
-        MouseMovementEvent,
+        char key = 0;
+    };
+
+    struct MouseEvent
+    {
+        int x = 0;
+        int y = 0;
+        int button = 0; //-1 = no click
     };
 
     struct Event
     {
-        EventType m_type;
+        size_t m_eventType = 0;
+        union
+        {
+            KeyBoardEvent m_keyBoardEvent;
+            MouseEvent m_mouseEvent;
+        };
     };
 
-    struct KeyPressEvent : public Event
-    {
-        char key;
-    };
-
-    struct MouseMoveEvent : public Event
-    {
-        int x;
-        int y;
-    };
-
-    struct MouseClickEvent : public Event
-    {
-        int x;
-        int y;
-        int button;
-    };
-
+    
 }

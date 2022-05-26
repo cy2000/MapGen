@@ -1,8 +1,13 @@
 #include "pch.h"
 #include "Texture.h"
+#include "Engine.h"
 
 E2::Texture::Texture()
     : type{ TextureType::Unknown }
-    , dememsion{ 0,0 }
+    , dimension{ 0,0 }
     , pTexture{ nullptr }
 {}
+
+E2::Texture::~Texture()
+{
+}

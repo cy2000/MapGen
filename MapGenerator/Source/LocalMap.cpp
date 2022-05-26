@@ -2,16 +2,24 @@
 #include "HeightBiomes.h"
 #include "Grid.h"
 #include "Region.h"
+#include "MapGenerator.h"
+#include "LocalScene.h"
 
 #include <Random.h>
 #include <FreeFunctions.h>
+#include <PerlinNoise.h>
+
+#include <Iostream>
 #include <map>
+#include <queue>
+#include <algorithm>
 
 constexpr float kColorValue = 0.7f;
 constexpr int kCitySplitTimes = 10;
 constexpr int kMinSplitTileCount = 50;
 constexpr int kMinSplitSize = 8;
 constexpr int kBuildingSizeInverse = 3;
+
 LocalMap::LocalMap()
     : m_pGrid{nullptr}
 {
@@ -20,11 +28,23 @@ LocalMap::LocalMap()
 LocalMap::~LocalMap()
 {
     delete m_pGrid;
+    for (auto* pRegion : m_rootRegions)
+    {
+        delete pRegion;
+    }
+    for (auto* pObject : m_treesAndBuildings)
+    {
+        delete pObject;
+    }
+    for (auto* pObject : m_grass)
+    {
+        delete pObject;
+    }
 }
 
-Tile* LocalMap::GetTile(int x, int y)
+bool LocalMap::IsWalkAble(int tileId)
 {
-    return m_pGrid->GetTile(x, y);
+    return m_tileNodes[tileId].m_isWalkable;
 }
 
 void LocalMap::Reset(int maxX, int maxY, int tileSize)
@@ -34,10 +54,44 @@ void LocalMap::Reset(int maxX, int maxY, int tileSize)
     {
         delete pRegion;
     }
+    for (auto* pObject : m_treesAndBuildings)
+    {
+        delete pObject;
+    }
+    for (auto* pObject : m_grass)
+    {
+        delete pObject;
+    }
+
+    m_colors.clear();
+    m_areas.clear();
+    m_tileNodes.clear();
+    m_tileTextures.clear();
+
     m_rootRegions.clear();
     m_cities.clear();
     m_pGrid = new Grid;
     m_pGrid->Init(maxX,maxY,tileSize);
+
+    m_buildableTiles.clear();
+}
+
+void LocalMap::ReFreshTileNodesForSearching()
+{
+    for (auto& node : m_tileNodes)
+    {
+        node.m_isTested = false;
+    }
+}
+
+void LocalMap::ReFreshPathNodesForPathing()
+{
+    for (auto& node : m_pathNodes)
+    {
+        node.m_gScore = std::numeric_limits<float>::max();
+        node.m_fScore = node.m_gScore;
+        node.m_cameFrom = -1;
+    }
 }
 
 void LocalMap::CopyTileInfo(int index, Tile* pInTile)
@@ -45,6 +99,8 @@ void LocalMap::CopyTileInfo(int index, Tile* pInTile)
     auto* pTile = m_pGrid->GetTile(index);
     pTile->type = pInTile->type;
     pTile->heightNoise = pInTile->heightNoise;
+    pTile->rawTemperature = pInTile->rawTemperature;
+    pTile->biomeId = pInTile->biomeId;
 }
 
 void LocalMap::CopyTileInfo(int x, int y, Tile* pInTile)
@@ -52,6 +108,8 @@ void LocalMap::CopyTileInfo(int x, int y, Tile* pInTile)
     auto* pTile = m_pGrid->GetTile(x,y);
     pTile->type = pInTile->type;
     pTile->heightNoise = pInTile->heightNoise;
+    pTile->rawTemperature = pInTile->rawTemperature;
+    pTile->biomeId = pInTile->biomeId;
 }
 
 void LocalMap::Terrace(int level)
@@ -64,6 +122,48 @@ void LocalMap::Terrace(int level)
     }
 }
 
+std::vector<float> LocalMap::GetPerlinNoiseMap(float interval, float zoomInLevel)
+{
+    auto seed = E2::Random();
+    std::vector<float> noiseMap;
+    noiseMap.reserve(m_pGrid->Size());
+
+    int gridWidth = m_pGrid->GetColumn(); //using width as long side 
+    int gridHeight = m_pGrid->GetRow();
+
+    float x0 = 0;
+    float y0 = 0;
+
+    for (int y = 0; y < gridHeight; ++y)
+    {
+        for (int x = 0; x < gridWidth; ++x)
+        {
+            if ((float)x > x0 + interval)
+            {
+                x0 += interval;
+            }
+            if (x == 0)
+            {
+                x0 = 0;
+            }
+
+            //range [-1, +1]
+            float noise = PerlinNoise::Perlin((x0 / gridWidth) * zoomInLevel, (y0 / gridWidth) * zoomInLevel, seed);
+            noiseMap.push_back(noise);
+
+        }
+        if ((float)y > y0 + interval)
+        {
+            y0 += interval;
+        }
+        if (y == 0)
+        {
+            y0 = 0;
+        }
+    }
+    return noiseMap;
+}
+
 void LocalMap::SplitRegion(Region* pRoot)
 {
     auto availableNodes = Region::FindSplittableRegions(pRoot);
@@ -72,7 +172,7 @@ void LocalMap::SplitRegion(Region* pRoot)
     availableNodes[choice]->Split(kMinSplitTileCount,kMinSplitSize);
 }
 
-void LocalMap::GenerateBuildings()
+void LocalMap::GenerateBuildableRegions()
 {
     FindCities();
     for (auto& [start, end] : m_cities)
@@ -88,6 +188,8 @@ void LocalMap::GenerateBuildings()
     SpawnBuildings();
 }
 
+// deprecated
+#if(0)
 void LocalMap::ConnectBuildings()
 {
     std::map<int , std::vector<Region*>> openSet;
@@ -163,7 +265,7 @@ void LocalMap::ConnectBuildings()
                         for (int x = startX; x <= endX; ++x)
                         {
                             auto* pTile = m_pGrid->GetTile(x, y);
-                            if (pTile->type == Tile::Type::CityRoad)
+                            //if (pTile->type == Tile::Type::CityRoad)
                             {
                                 roadTiles.push_back(pTile);
                             }
@@ -250,24 +352,8 @@ void LocalMap::ConnectBuildings()
         openSet.clear();
         closeSet.clear();
     }
-    
 }
-
-void LocalMap::Draw()
-{
-    for (int i = 0; i < m_pGrid->Size(); ++i)
-    {
-        Tile* pTile = m_pGrid->GetTile(i);
-        switch (pTile->type)
-        {
-        case Tile::Type::Empty: DrawRect(pTile->rect, PickColor(pTile->heightNoise)); break;
-        case Tile::Type::City: DrawRect(pTile->rect, E2::Mono::kLightGray); break;
-        case Tile::Type::CityRoad: DrawRect(pTile->rect, E2::Red::kRed); break;
-        case Tile::Type::Road:DrawRect(pTile->rect, E2::Red::kPink); break;
-        case Tile::Type::Building:DrawRect(pTile->rect, E2::Mono::kDark); break;
-        }
-    }
-}
+#endif
 
 void LocalMap::DrawHeight()
 {
@@ -290,6 +376,1108 @@ void LocalMap::DrawHeightTerrace(int level)
     }
 }
 
+void LocalMap::LoadArea(float level)
+{
+    m_tileNodes.reserve(m_pGrid->Size());
+
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+        auto height = (float)(std::lroundf(pTile->heightNoise * (float)level)) / (float)level;
+
+        m_tileNodes.emplace_back(TileNode{ pTile->id, 0, height, true });
+    }
+
+    for (int i = 0; i < m_tileNodes.size(); ++i)
+    {
+        if (!m_tileNodes[i].m_isTested) // untested node
+        {
+            BuildArea(i);
+        }
+    }
+
+    m_colors.reserve(m_areas.size());
+    for (int i=0; i< m_areas.size(); ++i)
+    {
+        m_colors.emplace_back(RandomColor());
+    }
+
+    LoadTerrainTexture();
+    LoadTilesetTexture();
+
+    ConnectAreas();
+    GenerateBuildableRegions();
+    BuildTown();
+    BuildTownRoad();
+
+    PopulateTrees();
+    PopulateGrass();
+
+    GetEngine().CleanRenderer();
+    DrawArea();
+    auto* pScene = dynamic_cast<LocalScene*>(MapGenerator::Get().GetScene(Scene::SceneId::LocalScene));
+    pScene->SetLocalView(GetEngine().CombineCurrentView());
+}
+
+//Search the region, put all tiles with same height in same area
+void LocalMap::BuildArea(int nodeId)
+{
+    auto testNeighbor = [](Tile* pNeighbor, std::vector<TileNode>& allNodes, int centerId, std::vector<int>& openSet)
+    {
+        if (pNeighbor) // quit if neighbor is out of screen
+        {
+            if (!allNodes[pNeighbor->id].m_isTested) // quit if neighbor is already tested
+            {
+                // if neighbor and this tile have same height, they are in same area
+                if (allNodes[pNeighbor->id].m_localHeight == allNodes[centerId].m_localHeight)
+                {
+                    // if it's already in the testing queue, don't add it again
+                    for (auto v : openSet)
+                    {
+                        if (v == pNeighbor->id) 
+                            return;
+                    }
+
+                    // put neighbor in testing queue
+                    openSet.push_back(pNeighbor->id);
+                }
+            }
+            if (allNodes[pNeighbor->id].m_localHeight > allNodes[centerId].m_localHeight)
+            {
+                allNodes[pNeighbor->id].m_isWalkable = false;
+            }
+        }
+    };
+
+    m_areas.emplace_back();
+
+    std::vector<int> openSet;
+    openSet.emplace_back(nodeId);
+
+    for (int i = 0; i < openSet.size(); ++i)
+    {
+        auto* pThisTile = m_pGrid->GetTile(openSet[i]);
+
+        auto* pNorth = m_pGrid->GetNeighborTile(pThisTile,Grid::Direction::North);
+        auto* pSouth = m_pGrid->GetNeighborTile(pThisTile,Grid::Direction::South);
+        auto* pEast = m_pGrid->GetNeighborTile(pThisTile,Grid::Direction::East);
+        auto* pWest = m_pGrid->GetNeighborTile(pThisTile,Grid::Direction::West);
+
+        testNeighbor(pNorth, m_tileNodes, pThisTile->id, openSet);
+        testNeighbor(pSouth, m_tileNodes, pThisTile->id, openSet);
+        testNeighbor(pEast, m_tileNodes, pThisTile->id, openSet);
+        testNeighbor(pWest, m_tileNodes, pThisTile->id, openSet);
+
+        m_areas.back().push_back(pThisTile->id);
+        m_tileNodes[pThisTile->id].m_isTested = true;
+    }
+}
+
+void LocalMap::DrawArea()
+{
+    static constexpr int textureSize = 16;
+    static constexpr int tileSetSize = 3;
+    for (int i =0; i< m_tileTextures.size(); ++i)
+    {
+        E2::Rect srcRect{ m_tileTextures[i].textureId % tileSetSize * textureSize
+                         ,m_tileTextures[i].textureId / tileSetSize * textureSize
+                         ,textureSize,textureSize };
+        DrawTexture(m_tileSets[m_tileTextures[i].tileSetId], &srcRect, &(m_pGrid->GetTile(i)->rect));
+    }
+    for (auto* pObject : m_grass)
+    {
+        pObject->Draw();
+    }
+
+    for (auto* pObject : m_treesAndBuildings)
+    {
+        pObject->Draw();
+    }
+}
+
+void LocalMap::LoadTerrainTexture()
+{
+    m_tileTextures.resize(m_pGrid->Size());
+    SetTileSetId();
+
+    auto tileIsInArea = [](int id,std::vector<int>& area)->bool
+    {
+        if (id == -1)
+        {
+            return false;
+        }
+        for (auto& tileId : area)
+        {
+            if (id == tileId)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto getTextureIdInTileSet = [](char condition,int xOffset, int yOffset) -> int
+    {
+        static constexpr int tileSetDimension = 3;
+        // 0|1|2
+        // 3|4|5
+        // 6|7|8
+
+        switch (condition)
+        {
+        case (0b0000'0110)/* pos = 0 */: return (0 + xOffset) + (0 + yOffset)*tileSetDimension;
+        case (0b0000'1110)/* pos = 1 */: return (1 + xOffset) + (0 + yOffset)*tileSetDimension;
+        case (0b0000'1010)/* pos = 2 */: return (2 + xOffset) + (0 + yOffset)*tileSetDimension;
+        case (0b0000'0111)/* pos = 3 */: return (0 + xOffset) + (1 + yOffset)*tileSetDimension;
+        case (0b0000'1111)/* pos = 4 */: return (1 + xOffset) + (1 + yOffset)*tileSetDimension;
+        case (0b0000'1011)/* pos = 5 */: return (2 + xOffset) + (1 + yOffset)*tileSetDimension;
+        case (0b0000'0101)/* pos = 6 */: return (0 + xOffset) + (2 + yOffset)*tileSetDimension;
+        case (0b0000'1101)/* pos = 7 */: return (1 + xOffset) + (2 + yOffset)*tileSetDimension;
+        case (0b0000'1001)/* pos = 8 */: return (2 + xOffset) + (2 + yOffset)*tileSetDimension;
+        default: /* error */ assert(false); return -1;
+        }
+    };
+
+    for (auto& area : m_areas)
+    {
+        for (auto tileId : area)
+        {
+            //choose a texture for this tile depending on its position in the area
+
+            auto northTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(tileId),Grid::Direction::North);
+            auto southTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(tileId),Grid::Direction::South);
+            auto eastTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(tileId),Grid::Direction::East);
+            auto westTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(tileId), Grid::Direction::West);
+
+            int northId = (northTile == nullptr) ? -1 : northTile->id;
+            int southId = (southTile == nullptr) ? -1 : southTile->id;
+            int eastId = (eastTile == nullptr) ? -1 : eastTile->id;
+            int westId = (westTile == nullptr) ? -1 : westTile->id;
+
+            //offset because height difference
+            //it will not be same because they are in different areas
+            int xOffset = 0;
+            int yOffset = 0;
+
+            char condition = 0;
+            if (tileIsInArea(northId, area))
+            {
+                condition |= 0b0000'0001;
+            }
+            else if(northId != -1)// this tile touches other area to the north
+            {
+                if (!m_tileNodes[northId].m_isWalkable)
+                {
+                    if (m_tileNodes[northId].m_localHeight > m_tileNodes[tileId].m_localHeight)
+                    {
+                        ++yOffset;
+                    }
+                }
+            }
+            else // this tile touches window to the north
+            {
+                ++yOffset;
+            }
+
+            if (tileIsInArea(southId, area))
+            {
+                condition |= 0b0000'0010;
+            }
+            else if (southId != -1)
+            {
+                if (!m_tileNodes[southId].m_isWalkable)
+                {
+                    if (m_tileNodes[southId].m_localHeight > m_tileNodes[tileId].m_localHeight)
+                    {
+                        --yOffset;
+                    }
+                }
+            }
+            else
+            {
+                --yOffset;
+            }
+
+            if (tileIsInArea(eastId, area))
+            {
+                condition |= 0b0000'0100;
+            }
+            else if (eastId != -1)
+            {
+                if (!m_tileNodes[eastId].m_isWalkable)
+                {
+                    if (m_tileNodes[eastId].m_localHeight > m_tileNodes[tileId].m_localHeight)
+                    {
+                        --xOffset;
+                    }
+                }
+            }
+            else
+            {
+                --xOffset;
+            }
+
+            if (tileIsInArea(westId, area))
+            {
+                condition |= 0b0000'1000;
+            }
+            else if (westId != -1)
+            {
+                if (!m_tileNodes[westId].m_isWalkable)
+                {
+                    if (m_tileNodes[westId].m_localHeight > m_tileNodes[tileId].m_localHeight)
+                    {
+                        ++xOffset;
+                    }
+                }
+            }
+            else
+            {
+                ++xOffset;
+            }
+
+            
+            m_tileTextures[tileId].textureId = getTextureIdInTileSet(condition, xOffset, yOffset);
+
+            TileSet usingTileSet = TileSet::Undefined;
+            switch (m_pGrid->GetTile(tileId)->biomeId)
+            {
+            case 1:  
+            case 2:  
+            case 3:  
+            case 4:  
+            case 5:  //usingTileSet = TileSet::UnderWater; break;
+            case 6:  usingTileSet = TileSet::UnderWater0; break;
+            case 7:
+            case 8:
+            case 9:  usingTileSet = TileSet::GrassyTerrain; break;
+            case 10: usingTileSet = TileSet::SnowyTerrain; break;
+            case 11:
+            case 12: usingTileSet = TileSet::GrassyTerrain; break;
+            case 13: usingTileSet = TileSet::SnowyTerrain; break;
+            case 14: usingTileSet = TileSet::GrassyTerrain; break;
+            case 15: 
+            case 16: usingTileSet = TileSet::DryTerrain; break;
+            case 17: 
+            case 18: 
+            case 19:
+            case 20: usingTileSet = TileSet::RockyTerrain; break;
+            case 21: 
+            case 22: usingTileSet = TileSet::SnowyTerrain; break;
+            default: assert(false && "no such tileset");
+            }
+
+
+
+            if (usingTileSet == TileSet::UnderWater0)
+            {
+                if (m_tileNodes[tileId].m_localHeight < 0.2)
+                {
+                    usingTileSet = TileSet::UnderWater3;
+                }
+                else if (m_tileNodes[tileId].m_localHeight < 0.3)
+                {
+                    usingTileSet = TileSet::UnderWater2;
+                }
+                else if (m_tileNodes[tileId].m_localHeight < 0.4)
+                {
+                    usingTileSet = TileSet::UnderWater1;
+                }
+            }
+
+            m_tileTextures[tileId].tileSetId = usingTileSet;
+            
+            assert(m_tileTextures[tileId].textureId >= 0 && m_tileTextures[tileId].textureId < 9);
+
+            // 0|1|2
+            // 3|4|5
+            // 6|7|8
+            switch (condition)
+            {
+            case (0b0000'1110)/* pos = 1 */: m_tileNodes[tileId].m_position = 1; m_tileNodes[tileId].m_canOpen = true; break;
+            case (0b0000'0111)/* pos = 3 */: m_tileNodes[tileId].m_position = 3; m_tileNodes[tileId].m_canOpen = true; break;
+            case (0b0000'1011)/* pos = 5 */: m_tileNodes[tileId].m_position = 5; m_tileNodes[tileId].m_canOpen = true; break;
+            case (0b0000'1101)/* pos = 7 */: m_tileNodes[tileId].m_position = 7; m_tileNodes[tileId].m_canOpen = true; break;
+            default: break;
+            }
+        }
+    }
+}
+
+void LocalMap::LoadTilesetTexture()
+{
+    auto sameBiome = [this](int thisTileId, int thatTileId)
+    {
+        if (thatTileId == -1)
+        {
+            return true;
+        }
+        if (m_pGrid->GetTile(thisTileId)->type == Tile::Type::Road)
+        {
+            return m_pGrid->GetTile(thisTileId)->type == m_pGrid->GetTile(thatTileId)->type;
+        }
+        else
+        {
+            return m_pGrid->GetTile(thisTileId)->biomeId == m_pGrid->GetTile(thatTileId)->biomeId;
+        }
+    };
+
+    auto getTextureIdInTileSet = [](char condition, int xOffset, int yOffset) -> int
+    {
+        static constexpr int tileSetDimension = 3;
+        // 0|1|2
+        // 3|4|5
+        // 6|7|8
+
+        switch (condition)
+        {
+        case (0b0000'0110)/* pos = 0 */: return (0 + xOffset) + (0 + yOffset) * tileSetDimension;
+        case (0b0000'1110)/* pos = 1 */: return (1 + xOffset) + (0 + yOffset) * tileSetDimension;
+        case (0b0000'1010)/* pos = 2 */: return (2 + xOffset) + (0 + yOffset) * tileSetDimension;
+        case (0b0000'0111)/* pos = 3 */: return (0 + xOffset) + (1 + yOffset) * tileSetDimension;
+        case (0b0000'1111)/* pos = 4 */: return (1 + xOffset) + (1 + yOffset) * tileSetDimension;
+        case (0b0000'1011)/* pos = 5 */: return (2 + xOffset) + (1 + yOffset) * tileSetDimension;
+        case (0b0000'0101)/* pos = 6 */: return (0 + xOffset) + (2 + yOffset) * tileSetDimension;
+        case (0b0000'1101)/* pos = 7 */: return (1 + xOffset) + (2 + yOffset) * tileSetDimension;
+        case (0b0000'1001)/* pos = 8 */: return (2 + xOffset) + (2 + yOffset) * tileSetDimension;
+        default: /* error */ assert(false); return -1;
+        }
+    };
+
+    for (int i = 0; i< m_tileTextures.size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+
+        TileSet newTileSet = TileSet::Undefined;
+        bool overrideBelow = false;
+        switch (pTile->biomeId)
+        {
+        case 1:  newTileSet = TileSet::ThickIce; overrideBelow = true; break;
+        case 2:  newTileSet = TileSet::ThinIce;  overrideBelow = true; break;
+
+        case 6:  newTileSet = TileSet::Beach; break;
+
+        case 8:  newTileSet = TileSet::Grass; break;
+        
+        case 12: newTileSet = TileSet::Forest; break;
+
+        case 16: newTileSet = TileSet::Dirt; break;
+        case 17: newTileSet = TileSet::Sand; break;
+
+        case 21: newTileSet = TileSet::Ice; break;
+        //default: assert(false && "no such tileset");
+        }
+
+        if (pTile->type == Tile::Type::Road)
+        {
+            newTileSet = TileSet::Road;
+            overrideBelow = false;
+            m_tileNodes[i].m_isWalkable = true;
+        }
+
+        if (newTileSet == TileSet::Undefined)
+        {
+            continue;
+        }
+
+        if (!m_tileNodes[i].m_isWalkable)
+        {
+            if (!overrideBelow)
+            {
+                continue;
+            }
+        }
+
+        auto northTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(i), Grid::Direction::North);
+        auto southTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(i), Grid::Direction::South);
+        auto eastTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(i), Grid::Direction::East);
+        auto westTile = m_pGrid->GetNeighborTile(m_pGrid->GetTile(i), Grid::Direction::West);
+
+        int northId = (northTile == nullptr) ? -1 : northTile->id;
+        int southId = (southTile == nullptr) ? -1 : southTile->id;
+        int eastId = (eastTile == nullptr) ? -1 : eastTile->id;
+        int westId = (westTile == nullptr) ? -1 : westTile->id;
+
+        int xOffset = 0;
+        int yOffset = 0;
+        char condition = 0;
+        if (sameBiome(i, northId))
+        {
+            condition |= 0b0000'0001;
+        }
+        else if (northId != -1)// this tile touches other area to the north
+        {
+            if (!m_tileNodes[northId].m_isWalkable)
+            {
+                if (m_tileNodes[northId].m_localHeight > m_tileNodes[i].m_localHeight)
+                ++yOffset;
+            }
+        }
+        else // this tile touches window to the north
+        {
+            ++yOffset;
+        }
+
+        if (sameBiome(i, southId))
+        {
+            condition |= 0b0000'0010;
+        }
+        else if (southId != -1)
+        {
+            if (!m_tileNodes[southId].m_isWalkable)
+            {
+                if (m_tileNodes[southId].m_localHeight > m_tileNodes[i].m_localHeight)
+                --yOffset;
+            }
+        }
+        else 
+        {
+            --yOffset;
+        }
+
+        if (sameBiome(i, eastId))
+        {
+            condition |= 0b0000'0100;
+        }
+        else if (eastId != -1)
+        {
+            if (m_tileNodes[eastId].m_localHeight > m_tileNodes[i].m_localHeight)
+            if (!m_tileNodes[eastId].m_isWalkable)
+            {
+                --xOffset;
+            }
+        }
+        else
+        {
+            --xOffset;
+        }
+
+        if (sameBiome(i, westId))
+        {
+            condition |= 0b0000'1000;
+        }
+        else if (westId != -1)
+        {
+            if (m_tileNodes[westId].m_localHeight > m_tileNodes[i].m_localHeight)
+            if (!m_tileNodes[westId].m_isWalkable)
+            {
+                ++xOffset;
+            }
+        }
+        else
+        {
+            ++xOffset;
+        }
+        m_tileTextures[i].tileSetId = newTileSet;
+        m_tileTextures[i].textureId = getTextureIdInTileSet(condition,xOffset,yOffset);
+    }
+}
+
+void LocalMap::BuildTown()
+{
+    auto testTile = [this](int x, int y, int xOff, int yOff) -> bool
+    {
+        bool isBad = false;
+        for (int b = y; b < y + yOff; ++b)
+        {
+            for (int a = x; a < x + xOff; ++a)
+            {
+                auto* pTile = m_pGrid->GetTile(a, b);
+                if (!pTile)
+                {
+                    isBad = true;
+                    break;
+                }
+
+                if (pTile->type != Tile::Type::Building)
+                {
+                    isBad = true;
+                    break;
+                }
+
+                if (!m_tileNodes[pTile->id].m_isWalkable)
+                {
+                    isBad = true;
+                    break;
+                }
+
+                if (pTile->biomeId < 6) //TODO
+                {
+                    isBad = true;
+                    break;
+                }
+            }
+            if (isBad)
+            {
+                break;
+            }
+        }
+        return isBad;
+    };
+
+    auto spawnBuilding = [this,&testTile](Region* pRegion, Grid* pGrid)
+    {
+        //on leaf node
+        if (!(pRegion->m_pLeft || pRegion->m_pRight))
+        {
+            int startX = pRegion->m_innerRegion.first.x;
+            int startY = pRegion->m_innerRegion.first.y;
+            int endX = pRegion->m_innerRegion.second.x;
+            int endY = pRegion->m_innerRegion.second.y;
+
+            std::unordered_map<int, std::vector<BuildingType>> buildableTiles;
+
+            for (int y = startY; y < endY; ++y)
+            {
+                for (int x = startX; x < endX; ++x)
+                {
+                    int tileId = pGrid->GetTile(x, y)->id;
+                    bool testResualt1 = testTile(x,y,4,4+1); //+1 because the south should be empty to make room for doors
+                    bool testResualt2 = testTile(x,y,5,3+1);
+                    bool testResualt3 = testTile(x,y,5,4+1);
+                    if (!testResualt1)
+                    {
+                        buildableTiles[tileId].push_back(BuildingType::X4Y4);
+                    }
+                    if (!testResualt2)
+                    {
+                        buildableTiles[tileId].push_back(BuildingType::X5Y3);
+                    }
+                    if (!testResualt3)
+                    {
+                        buildableTiles[tileId].push_back(BuildingType::X5Y4);
+                    }
+                }
+            }
+
+            if (!buildableTiles.empty())
+            {
+                //randomly choose a good tile
+                auto random_it = std::next(std::begin(buildableTiles), E2::Random(0, buildableTiles.size() - 1));
+                //randomly choose a building type
+                int buildingChoiceId = (int)E2::Random(0, random_it->second.size() - 1);
+                BuildingType buildingChoice = random_it->second[buildingChoiceId];
+                m_buildableTiles[random_it->first] = buildingChoice;
+            }
+        }
+    };
+
+    //Find good places for buildings
+    for (auto* pRegion : m_rootRegions)
+    {
+        Region::WalkTheTree(pRegion, spawnBuilding, m_pGrid);
+    }
+
+    //Set the tiles underneath unwalkable, find entrance tile for path finding
+    for (auto& [tileId, buildingType] : m_buildableTiles)
+    {
+        auto* pTile = m_pGrid->GetTile(tileId);
+        E2::Vector2 pos = { pTile->x, pTile->y };
+        E2::Vector2 dimension{};
+        E2::Vector2 entrance{};
+        switch (buildingType)
+        {
+        case BuildingType::X4Y4: dimension = { 4, 4 }; entrance = { 1,3 }; break;
+        case BuildingType::X5Y3: dimension = { 5, 3 }; entrance = { 3,2 }; break;
+        case BuildingType::X5Y4: dimension = { 5, 4 }; entrance = { 1,3 }; break;
+        }
+        for (int y1 = pos.y; y1 < pos.y + dimension.y; ++y1)
+        {
+            for (int x1 = pos.x; x1 < pos.x + dimension.x; ++x1)
+            {
+                auto* pTempTile = m_pGrid->GetTile(x1,y1);
+                m_tileNodes[pTempTile->id].m_isWalkable = false;
+            }
+        }
+        //create entrance tile for path finding to build roads in town
+        auto* pDoorStep = m_pGrid->GetTile(pos.x+entrance.x,pos.y+entrance.y);
+        m_doorSteps.emplace_back(pDoorStep->id);
+    }
+
+    //Create buildings
+    for (auto& [tileId,buildingType] : m_buildableTiles)
+    {
+        auto* pTile = m_pGrid->GetTile(tileId);
+        int tileSize = pTile->rect.w;
+        E2::Vector2 pos = { pTile->rect.x, pTile->rect.y };
+        E2::Vector2 dimension{};
+        switch (buildingType)
+        {
+        case BuildingType::X4Y4: dimension = { tileSize * 4,tileSize * 4 }; break;
+        case BuildingType::X5Y3: dimension = { tileSize * 5,tileSize * 3 }; break;
+        case BuildingType::X5Y4: dimension = { tileSize * 5,tileSize * 4 }; break;
+        }
+        auto* pBuilding = new Building(buildingType, m_buildingSets[buildingType], pos, dimension);
+        m_treesAndBuildings.push_back(pBuilding);
+    }
+}
+
+// connect the buldings from door to door
+void LocalMap::BuildTownRoad()
+{
+    if (m_doorSteps.size() > 1)
+    {
+        for (int i = 0; i < m_doorSteps.size(); ++i)
+        {
+            for (int k = 0; k < m_doorSteps.size(); ++k)
+            {
+                if (i == k)
+                {
+                    continue;
+                }
+                if (m_pathNodes.empty())
+                {
+                    m_pathNodes = std::vector<PathNode>(m_pGrid->Size());
+                }
+                else
+                {
+                    ReFreshPathNodesForPathing();
+                }
+                FindPath(m_doorSteps[i], m_doorSteps[k]);
+            }
+        }
+    }
+
+    for (auto id : m_roads)
+    {
+        m_tileTextures[id].tileSetId = TileSet::TownRoad;
+        m_tileTextures[id].textureId = 0;
+    }
+}
+
+void LocalMap::DrawAreaColor()
+{
+
+    for (int i = 0; i <m_areas.size(); ++i)
+    {
+        for (auto tileId : m_areas[i])
+        {
+            DrawRect(m_pGrid->GetTile(tileId)->rect, m_colors[i]);
+        }
+    }
+
+    for (int i = 0; i < m_tileNodes.size(); ++i)
+    {
+        if (!m_tileNodes[i].m_isWalkable)
+            DrawRectOutline(m_pGrid->GetTile(i)->rect, E2::Red::kRed);
+    }
+
+    for (auto tileId : m_doorSteps)
+    {
+        auto* pTile = m_pGrid->GetTile(tileId);
+        DrawRect(pTile->rect, E2::Blue::kBlue);
+    }
+
+    for (auto tileId : m_roads)
+    {
+        auto* pTile = m_pGrid->GetTile(tileId);
+        DrawRectOutline(pTile->rect, E2::Blue::kBlue);
+    }
+
+    for (int i = 0; i < m_tileNodes.size(); ++i)
+    {
+        if (m_tileNodes[i].m_isGrass)
+            DrawRectOutline(m_pGrid->GetTile(i)->rect, E2::Green::kGreen);
+    }
+
+}
+
+void LocalMap::ConnectAreas()
+{
+    for (auto& area : m_areas)
+    {
+        //gather all eadges
+        std::vector<int> eadgeTiles;
+        for (int i = 0; i < area.size(); ++i)
+        {
+            if (m_tileNodes[area[i]].m_canOpen)
+            {
+                eadgeTiles.push_back(area[i]);
+            }
+        }
+        int connections = (int)eadgeTiles.size() / 40; // Tune number
+
+        for (int j = 0; j < connections; ++j)
+        {
+            int choice = (int)E2::Random(0, eadgeTiles.size() - 1);
+            assert(m_tileNodes[eadgeTiles[choice]].m_position != -1);
+            m_tileTextures[eadgeTiles[choice]].textureId = 4;
+            m_tileNodes[eadgeTiles[choice]].m_isWalkable = true;
+        }
+    }
+}
+
+void LocalMap::PopulateTrees()
+{
+    //prepare noise
+    std::vector<float> noiseMap = GetPerlinNoiseMap(5.f,15.f);
+
+    auto testTile = [this](int x, int y, int xOff, int yOff) -> bool
+    {
+        bool isGood = false;
+        for (int b = y; b < y + yOff; ++b)
+        {
+            for (int a = x; a < x + xOff; ++a)
+            {
+                auto* pTile = m_pGrid->GetTile(a, b);
+                if (!pTile || pTile->type == Tile::Type::City
+                    || pTile->type == Tile::Type::Road
+                    || !m_tileNodes[pTile->id].m_isWalkable
+                   )
+                {
+                    isGood = false;
+                    break;
+                }
+                else
+                {
+                    isGood = true;
+                }
+            }
+            if (!isGood)
+            {
+                break;
+            }
+        }
+        return isGood;
+    };
+
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+        // if all tiles with in range is good, maybe plant the tree
+        if (testTile(pTile->x, pTile->y, 3, 3))
+        {
+            // test the tile at the root
+            auto* pRootTile = m_pGrid->GetTile(pTile->x + 1, pTile->y + 2);
+            if (noiseMap[pRootTile->id] < 0.1f)
+            {
+                continue;
+            }
+
+            auto biomeType = pRootTile->biomeId;
+            TreeType treeType = TreeType::None;
+            switch (biomeType)
+            {
+            case 7:     
+            case 8:
+            case 9:  treeType = TreeType::Green; break;
+            case 10: treeType = TreeType::Cold; break;
+            case 11: treeType = TreeType::Rain; break;
+            case 12: treeType = TreeType::Green; break;
+            case 13: treeType = TreeType::HalfSnow; break;
+            case 14: treeType = TreeType::Cold; break;
+            case 15: treeType = TreeType::Yellow; break;
+            case 16: treeType = TreeType::Dead; break;
+            case 22: treeType = TreeType::HalfSnow; break;
+            default: break;
+            }
+
+            if (treeType != TreeType::None)
+            {
+                auto tileSize = pTile->rect.w;
+                E2::Vector2 pos = { pTile->rect.x, pTile->rect.y - tileSize};
+                E2::Vector2 dimension = { tileSize * 3,tileSize * 4 };
+                auto* pTree = new Tree(m_treeSets[treeType], pos, dimension);
+                m_treesAndBuildings.push_back(pTree);
+
+                //block out the space
+                for (auto b = pTile->y; b < pTile->y + 3; ++b)
+                {
+                    for (auto a = pTile->x; a < pTile->x + 3; ++a)
+                    {
+                        auto* pTempTile = m_pGrid->GetTile(a, b);
+                        m_tileNodes[pTempTile->id].m_isWalkable = false;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void LocalMap::PopulateGrass()
+{
+    // prepare Noise
+    std::vector<float> noise = GetPerlinNoiseMap(5.f,15.f);
+
+    for (int i = 0; i < m_pGrid->Size(); ++i)
+    {
+        auto* pTile = m_pGrid->GetTile(i);
+        // if all tiles with in range is good, maybe spawn grass
+        if (pTile && pTile->type != Tile::Type::City
+            && pTile->type != Tile::Type::Road
+            && m_tileNodes[pTile->id].m_isWalkable
+            && !m_tileNodes[pTile->id].m_occupied
+            && noise[pTile->id] > 0.1f)
+        {
+            // test the tile 
+            auto biomeType = pTile->biomeId;
+            GrassType grassType = GrassType::None;
+            switch (biomeType)
+            {
+            case 7:  grassType = GrassType::Green; break;
+            case 8:  grassType = GrassType::Tall; break;
+            case 9:  grassType = GrassType::Green; break;
+            case 10: grassType = GrassType::Cold; break;
+            case 11: grassType = GrassType::Rain; break;
+            case 12: grassType = GrassType::Rain; break;
+            case 13: grassType = GrassType::HalfSnow; break;
+            case 14: grassType = GrassType::Cold; break;
+            case 15: grassType = GrassType::Yellow; break;
+            case 22: grassType = GrassType::HalfSnow; break;
+            default: break;
+            }
+
+            if (grassType != GrassType::None)
+            {
+                auto tileSize = pTile->rect.w;
+                E2::Vector2 pos = { pTile->rect.x, pTile->rect.y };
+                E2::Vector2 dimension = { tileSize, tileSize};
+                auto* pGrass = new Grass(m_grassSets[grassType], pos, dimension);
+                m_grass.push_back(pGrass);
+
+                m_tileNodes[pTile->id].m_occupied = true;
+                m_tileNodes[pTile->id].m_isGrass = true;
+            }
+        }
+    }
+}
+
+void LocalMap::OnNotify(E2::Event evt)
+{
+    if (!m_pGrid || m_pGrid->Size() == 0)
+    {
+        return;
+    }
+
+    int x = evt.m_mouseEvent.x;
+    int y = evt.m_mouseEvent.y;
+    int tileSize = m_pGrid->GetTileSize().x;
+    auto* pTile = m_pGrid->GetTile(x/tileSize,y/tileSize);
+
+    //right click
+    if (evt.m_mouseEvent.button == 3)
+    {
+        std::cout << "*************** Clicked Tile: ***************\n";
+        std::cout << "Index = " << pTile->id << "\n";
+        std::cout << "x = " << pTile->x << ", y = " << pTile->y << "\n";
+        std::cout << "xCoord = " << pTile->rect.x << ", yCoord = " << pTile->rect.x << "\n";
+        std::cout << "HeightNoise = " << pTile->heightNoise << "\n";
+        std::cout << "Temperature = " << pTile->rawTemperature << "\n";
+        std::cout << "Biome ID = " << pTile->biomeId << "\n";
+        std::cout << "Terrain Height = " << m_tileNodes[pTile->id].m_localHeight << "\n";
+        std::cout << "Tile ID = " << m_tileNodes[pTile->id].m_tileId << "\n";
+        std::cout << "Tile Relative Position = " << m_tileNodes[pTile->id].m_position << "\n";
+        std::cout << "*********************************************\n";
+    }
+
+    //middle click
+    if (evt.m_mouseEvent.button == 2)
+    {
+        //MapGenerator::Get().SpawnPlayer(pTile);
+    }
+}
+
+void LocalMap::SetTileSetId()
+{
+    (m_tileSets[TileSet::GrassyTerrain]) = GetEngine().CreateTexture("Assets/Tile/Terrain/Grassy.bmp");
+    (m_tileSets[TileSet::SnowyTerrain])= GetEngine().CreateTexture("Assets/Tile/Terrain/Snowy.bmp");
+    (m_tileSets[TileSet::RockyTerrain])= GetEngine().CreateTexture("Assets/Tile/Terrain/Rocky.bmp");
+    (m_tileSets[TileSet::DryTerrain])= GetEngine().CreateTexture("Assets/Tile/Terrain/Dry.bmp");
+    (m_tileSets[TileSet::UnderWater0])= GetEngine().CreateTexture("Assets/Tile/Terrain/UnderWater-0.bmp");
+    (m_tileSets[TileSet::UnderWater1])= GetEngine().CreateTexture("Assets/Tile/Terrain/UnderWater-1.bmp");
+    (m_tileSets[TileSet::UnderWater2])= GetEngine().CreateTexture("Assets/Tile/Terrain/UnderWater-2.bmp");
+    (m_tileSets[TileSet::UnderWater3])= GetEngine().CreateTexture("Assets/Tile/Terrain/UnderWater-3.bmp");
+    (m_tileSets[TileSet::Beach])= GetEngine().CreateTexture("Assets/Tile/Terrain/Beach.bmp");
+    (m_tileSets[TileSet::Grass])= GetEngine().CreateTexture("Assets/Tile/Terrain/Grass.bmp");
+    (m_tileSets[TileSet::Dirt])= GetEngine().CreateTexture("Assets/Tile/Terrain/Dirt.bmp");
+    (m_tileSets[TileSet::Forest])= GetEngine().CreateTexture("Assets/Tile/Terrain/Forest.bmp");
+    (m_tileSets[TileSet::Ice])= GetEngine().CreateTexture("Assets/Tile/Terrain/Ice.bmp");
+    (m_tileSets[TileSet::Sand])= GetEngine().CreateTexture("Assets/Tile/Terrain/Sand.bmp");
+    (m_tileSets[TileSet::ThinIce])= GetEngine().CreateTexture("Assets/Tile/Terrain/ThinIce.bmp");
+    (m_tileSets[TileSet::ThickIce])= GetEngine().CreateTexture("Assets/Tile/Terrain/ThickIce.bmp");
+    (m_tileSets[TileSet::Road])= GetEngine().CreateTexture("Assets/Tile/Terrain/Road1.bmp");
+    (m_tileSets[TileSet::TownRoad])= GetEngine().CreateTexture("Assets/Tile/Terrain/TownRoad.bmp");
+
+    (m_buildingSets[BuildingType::X4Y4]) = GetEngine().CreateTexture("Assets/Building/HouseX4Y4.bmp");
+    (m_buildingSets[BuildingType::X5Y3]) = GetEngine().CreateTexture("Assets/Building/HouseX5Y3.png");
+    (m_buildingSets[BuildingType::X5Y4]) = GetEngine().CreateTexture("Assets/Building/HouseX5Y4.png");
+    
+    (m_treeSets[TreeType::Cold]) = GetEngine().CreateTexture("Assets/Tree/ColdTree.png");
+    (m_treeSets[TreeType::Green]) = GetEngine().CreateTexture("Assets/Tree/GreenTree.png");
+    (m_treeSets[TreeType::Yellow]) = GetEngine().CreateTexture("Assets/Tree/YellowTree.png");
+    (m_treeSets[TreeType::Rain]) = GetEngine().CreateTexture("Assets/Tree/RainTree.png");
+    (m_treeSets[TreeType::HalfSnow]) = GetEngine().CreateTexture("Assets/Tree/HalfSnowTree.png");
+    (m_treeSets[TreeType::Dead]) = GetEngine().CreateTexture("Assets/Tree/DeadTree.png");
+
+    (m_grassSets[GrassType::Cold]) = GetEngine().CreateTexture("Assets/Grass/ColdGrass.png");
+    (m_grassSets[GrassType::Green]) = GetEngine().CreateTexture("Assets/Grass/GreenGrass.png");
+    (m_grassSets[GrassType::Rain]) = GetEngine().CreateTexture("Assets/Grass/RainGrass.png");
+    (m_grassSets[GrassType::HalfSnow]) = GetEngine().CreateTexture("Assets/Grass/HalfSnowGrass.png");
+    (m_grassSets[GrassType::Yellow]) = GetEngine().CreateTexture("Assets/Grass/YellowGrass.png");
+    (m_grassSets[GrassType::Tall]) = GetEngine().CreateTexture("Assets/Grass/TallGrass.png");
+}
+
+void LocalMap::FindPath(PathNodeId start, PathNodeId end)
+{
+    std::vector<PathNodeId> testedNodeId;
+    Grid::Direction currentDir = Grid::Direction::South;
+
+    testedNodeId.push_back(start);
+    testedNodeId.push_back(end);
+
+    auto comp = [this](TileId left, TileId right)
+    {
+        return m_pathNodes[left].m_fScore > m_pathNodes[right].m_fScore;
+    };
+
+    auto getGScore = [this,&currentDir](PathNodeId current, PathNodeId start, PathNodeId end, Grid::Direction newDir)
+    {
+        if (!m_tileNodes[current].m_isWalkable)
+        {
+            if (m_tileNodes[current].m_canOpen)
+            {
+                return 1000;
+            }
+            else
+            {
+                return 100000;
+            }
+        }
+        else
+        {
+            if (m_tileNodes[current].m_isRoad)
+            {
+                return 0;
+            }
+            else
+            {
+                return 100;
+            }
+        }
+    };
+
+    auto heuristic = [this](PathNodeId current, PathNodeId end)
+    {
+        auto deltaX = m_pGrid->GetTile(current)->x - m_pGrid->GetTile(end)->x;
+        auto deltaY = m_pGrid->GetTile(current)->y - m_pGrid->GetTile(end)->y;
+        return deltaX * deltaX + deltaY * deltaY;
+    };
+
+    auto findId = [](std::vector<PathNodeId>& container, PathNodeId inId)->bool
+    {
+        for (auto& id : container)
+        {
+            if (id == inId)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::priority_queue<PathNodeId, std::vector<PathNodeId>, decltype(comp)> openSet(comp);
+    std::vector<PathNodeId> closeSet;
+
+    auto testNeighbor = [this, &findId, &closeSet, &heuristic, &getGScore, &testedNodeId, &openSet]
+    (Grid::Direction newDir, PathNodeId neighborNodeId, PathNodeId currentNodeId, PathNodeId startNodeId, PathNodeId endNodeId)->bool
+    {
+        auto* pNeighborTile = m_pGrid->GetTile(neighborNodeId);
+        assert(pNeighborTile);
+        // if this neighbor is closed
+        if (!findId(closeSet, neighborNodeId))
+        {
+            float gNew = 0.f;
+            float hNew = 0.f;
+            float fNew = 0.f;
+            
+            gNew = m_pathNodes[currentNodeId].m_gScore + getGScore(currentNodeId, startNodeId, endNodeId, newDir);
+            hNew = (float)heuristic(currentNodeId, endNodeId);
+            fNew = gNew + hNew;
+
+            //if tested, relax
+            if (findId(testedNodeId, neighborNodeId))
+            {
+                if (m_pathNodes[neighborNodeId].m_fScore > fNew)
+                {
+                    m_pathNodes[neighborNodeId].m_gScore = gNew;
+                    m_pathNodes[neighborNodeId].m_fScore = fNew;
+                    m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                    openSet.push(neighborNodeId);
+                    return true;
+                }
+            }
+            //not tested yet
+            else
+            {
+                testedNodeId.push_back(neighborNodeId);
+                m_pathNodes[neighborNodeId].m_gScore = gNew;
+                m_pathNodes[neighborNodeId].m_fScore = fNew;
+                m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                openSet.push(neighborNodeId);
+            }
+        }
+        return false;
+    };
+
+    m_pathNodes[start].m_gScore = 0;
+    m_pathNodes[start].m_fScore = (float)heuristic(start, end);
+    openSet.push(start);
+
+    while (!(openSet.empty() || openSet.top() == end))
+    {
+        auto current = openSet.top();
+        closeSet.push_back(current);
+        openSet.pop();
+        // find neighbors
+        auto* pCurrentTile = m_pGrid->GetTile(current);
+        auto* pNorthTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::North);
+        if (pNorthTile)
+        {
+            if (testNeighbor(Grid::Direction::North,pNorthTile->id, current, start, end))
+            {
+                currentDir = Grid::Direction::North;
+            }
+        }
+
+        auto* pSouthTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::South);
+        if (pSouthTile)
+        {
+            if (testNeighbor(Grid::Direction::South, pSouthTile->id, current, start, end))
+            {
+                currentDir = Grid::Direction::South;
+            }
+        }
+
+        auto* pEastTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::East);
+        if (pEastTile)
+        {
+            if (testNeighbor(Grid::Direction::East, pEastTile->id, current, start, end))
+            {
+                currentDir = Grid::Direction::East;
+            }
+        }
+
+        auto* pWestTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::West);
+        if (pWestTile)
+        {
+            if (testNeighbor(Grid::Direction::West, pWestTile->id, current, start, end))
+            {
+                currentDir = Grid::Direction::West;
+            }
+        }
+    }
+
+    // reconstruct path, it is reversed but it's ok
+    auto nodeId = openSet.top();
+    while (nodeId != -1)
+    {
+        m_tileNodes[nodeId].m_isRoad = true;
+        m_pGrid->GetTile(nodeId)->type = Tile::Type::Road;
+        m_roads.push_back(nodeId);
+        nodeId = m_pathNodes[nodeId].m_cameFrom;
+    }
+}
+
 void LocalMap::FindCities()
 {
     for (int i = 0; i < m_pGrid->Size(); ++i)
@@ -299,14 +1487,14 @@ void LocalMap::FindCities()
         {
             continue;
         }
-        if (pTile->type == Tile::Type::City || pTile->type == Tile::Type::CityRoad)
+        if (pTile->type == Tile::Type::City)
         {
             auto* pStartTile = pTile;
             //find the end tile
             auto* pEastEnd = pTile;
             auto* pNeighborEast = m_pGrid->GetNeighborTile(pTile, Grid::Direction::East);
             while (pNeighborEast
-                && (pNeighborEast->type == Tile::Type::City || pNeighborEast->type == Tile::Type::CityRoad))
+                && (pNeighborEast->type == Tile::Type::City ))
             {
                 pEastEnd = pNeighborEast;
                 pNeighborEast = m_pGrid->GetNeighborTile(pNeighborEast, Grid::Direction::East);
@@ -315,7 +1503,7 @@ void LocalMap::FindCities()
             auto* pSouthEnd = pTile;
             auto* pNeighborSouth = m_pGrid->GetNeighborTile(pTile, Grid::Direction::South);
             while (pNeighborSouth
-                && (pNeighborSouth->type == Tile::Type::City || pNeighborSouth->type == Tile::Type::CityRoad))
+                && (pNeighborSouth->type == Tile::Type::City ))
             {
                 pSouthEnd = pNeighborSouth;
                 pNeighborSouth = m_pGrid->GetNeighborTile(pNeighborSouth, Grid::Direction::South);
@@ -332,6 +1520,7 @@ void LocalMap::SpawnBuildings()
 {
     auto spawnBuilding = [](Region* pRegion, Grid* pGrid)
     {
+        //if there are sub regions, the innerRegion is the bound of them
         if (pRegion->m_pLeft && pRegion->m_pRight)
         {
             auto& leftRegion = pRegion->m_pLeft->m_innerRegion;
@@ -342,6 +1531,7 @@ void LocalMap::SpawnBuildings()
             auto endY = leftRegion.second.y > rightRegion.second.y ? leftRegion.second.y : rightRegion.second.y;
             pRegion->m_innerRegion = { {startX,startY},{endX,endY} };
         }
+        //if this is the leaf region, spawn a building here
         else
         {
             auto startX = pRegion->m_region.first.x + (int)E2::Random(1, kBuildingSizeInverse);
@@ -382,50 +1572,238 @@ bool LocalMap::IsTileInCity(Tile* pTile)
     return false;
 }
 
-const E2::Color& LocalMap::PickColor(float noise)
+std::vector<int> LocalMap::GetSpawnAbleTiles()
 {
-    if (noise < kDeepWater)
+    std::vector<int> goodTiles;
+    for (int i =0; i< m_tileNodes.size(); ++i)
     {
-        return E2::Blue::kNavy;
+        if (m_tileNodes[i].m_isGrass)
+        {
+            goodTiles.push_back(i);
+        }
     }
-    else if (noise < kShallowWater)
+    return goodTiles;
+}
+
+std::vector<LocalMap::TileId> LocalMap::GetReachableTiles(E2::Vector2f origin, float radius)
+{
+    int originId = m_pGrid->FindTile(origin);
+    if (originId == -1)
     {
-        return E2::Blue::kRoyalBlue;
+        assert(false && "cannot find the tile at location");
+        return std::vector<TileId>();
     }
-    else if (noise < kBeach)
+
+    auto testNeighbor = [this,&originId](Tile* pNeighbor, std::vector<TileNode>& allNodes, int centerId, std::vector<int>& openSet, float distance)
     {
-        return E2::Yellow::kLemon;
+        if (pNeighbor) // quit if neighbor is out of screen
+        {
+            // quit if neighbor is out of distance
+            if(m_pGrid->Distance2(m_pGrid->GetTile(originId), pNeighbor)> distance* distance)
+            {
+                return;
+            }
+            
+            if (!allNodes[pNeighbor->id].m_isTested) // quit if neighbor is already tested
+            {
+                // if neighbor is grass
+                if (allNodes[pNeighbor->id].m_isGrass)
+                {
+                    // if it's already in the testing queue, don't add it again
+                    for (auto v : openSet)
+                    {
+                        if (v == pNeighbor->id)
+                            return;
+                    }
+
+                    // put neighbor in testing queue
+                    openSet.push_back(pNeighbor->id);
+                }
+            }
+        }
+    };
+
+    ReFreshTileNodesForSearching();
+    std::vector<int> output;
+
+    std::vector<int> openSet;
+    openSet.emplace_back(originId);
+
+    for (int i = 0; i < openSet.size(); ++i)
+    {
+        auto* pThisTile = m_pGrid->GetTile(openSet[i]);
+
+        auto* pNorth = m_pGrid->GetNeighborTile(pThisTile, Grid::Direction::North);
+        auto* pSouth = m_pGrid->GetNeighborTile(pThisTile, Grid::Direction::South);
+        auto* pEast = m_pGrid->GetNeighborTile(pThisTile, Grid::Direction::East);
+        auto* pWest = m_pGrid->GetNeighborTile(pThisTile, Grid::Direction::West);
+
+        testNeighbor(pNorth, m_tileNodes, pThisTile->id, openSet, radius);
+        testNeighbor(pSouth, m_tileNodes, pThisTile->id, openSet, radius);
+        testNeighbor(pEast, m_tileNodes, pThisTile->id, openSet, radius);
+        testNeighbor(pWest, m_tileNodes, pThisTile->id, openSet, radius);
+
+        output.push_back(pThisTile->id);
+        m_tileNodes[pThisTile->id].m_isTested = true;
     }
-    else if (noise < kSwamp)
+    return output;
+}
+
+E2::Vector2f LocalMap::GetRandomNearPositionInNav(E2::Vector2f origin, float radius)
+{
+    auto goodTiles = GetReachableTiles(origin, radius);
+    auto choice = E2::Random(0, goodTiles.size()-1);
+    auto* pTile = m_pGrid->GetTile(goodTiles[choice]);
+    return E2::Vector2f((float)pTile->rect.x, (float)pTile->rect.y);
+}
+
+std::vector<E2::Vector2f> LocalMap::BuildPath(E2::Vector2f from, E2::Vector2f to)
+{
+    if (m_pathNodes.empty())
     {
-        return E2::Red::kRedWood;
-    }
-    else if (noise < kGrass)
-    {
-        return E2::Green::kLightGreen;
-    }
-    else if (noise < kForest)
-    {
-        return E2::Green::kForest;
-    }
-    else if (noise < kJungle)
-    {
-        return E2::Green::kYellowGreen;
-    }
-    else if (noise < kSavannah)
-    {
-        return E2::Green::kOlive;
-    }
-    else if (noise < kTundra)
-    {
-        return E2::Red::kTuscan;
-    }
-    else if (noise < kRock)
-    {
-        return E2::Red::kApricot;
+        m_pathNodes = std::vector<PathNode>(m_pGrid->Size());
     }
     else
     {
-        return E2::Mono::kWhite;
+        ReFreshPathNodesForPathing();
     }
+   
+    int start = m_pGrid->FindTile(from);
+    int end = m_pGrid->FindTile(to);
+
+    std::vector<PathNodeId> testedNodeId;
+    testedNodeId.push_back(start);
+    testedNodeId.push_back(end);
+
+    auto comp = [this](TileId left, TileId right)
+    {
+        return m_pathNodes[left].m_fScore > m_pathNodes[right].m_fScore;
+    };
+
+    auto getGScore = [this](PathNodeId current, PathNodeId start, PathNodeId end, Grid::Direction newDir)
+    {
+        if (m_tileNodes[current].m_isGrass)
+        {
+            return 0;
+        }
+        else if(m_tileNodes[current].m_isWalkable)
+        {
+            return 1;
+        }
+        else
+        {
+            return 1000000;
+        }
+    };
+
+    auto heuristic = [this](PathNodeId current, PathNodeId end)
+    {
+        auto deltaX = m_pGrid->GetTile(current)->x - m_pGrid->GetTile(end)->x;
+        auto deltaY = m_pGrid->GetTile(current)->y - m_pGrid->GetTile(end)->y;
+        return deltaX * deltaX + deltaY * deltaY;
+    };
+
+    auto findId = [](std::vector<PathNodeId>& container, PathNodeId inId)->bool
+    {
+        for (auto& id : container)
+        {
+            if (id == inId)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::priority_queue<PathNodeId, std::vector<PathNodeId>, decltype(comp)> openSet(comp);
+    std::vector<PathNodeId> closeSet;
+
+    auto testNeighbor = [this, &findId, &closeSet, &heuristic, &getGScore, &testedNodeId, &openSet]
+    (Grid::Direction newDir, PathNodeId neighborNodeId, PathNodeId currentNodeId, PathNodeId startNodeId, PathNodeId endNodeId)->bool
+    {
+        auto* pNeighborTile = m_pGrid->GetTile(neighborNodeId);
+        assert(pNeighborTile);
+        // if this neighbor is closed
+        if (!findId(closeSet, neighborNodeId))
+        {
+            float gNew = 0.f;
+            float hNew = 0.f;
+            float fNew = 0.f;
+
+            gNew = m_pathNodes[currentNodeId].m_gScore + getGScore(currentNodeId, startNodeId, endNodeId, newDir);
+            hNew = (float)heuristic(currentNodeId, endNodeId);
+            fNew = gNew + hNew;
+
+            //if tested, relax
+            if (findId(testedNodeId, neighborNodeId))
+            {
+                if (m_pathNodes[neighborNodeId].m_fScore > fNew)
+                {
+                    m_pathNodes[neighborNodeId].m_gScore = gNew;
+                    m_pathNodes[neighborNodeId].m_fScore = fNew;
+                    m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                    openSet.push(neighborNodeId);
+                    return true;
+                }
+            }
+            //not tested yet
+            else
+            {
+                testedNodeId.push_back(neighborNodeId);
+                m_pathNodes[neighborNodeId].m_gScore = gNew;
+                m_pathNodes[neighborNodeId].m_fScore = fNew;
+                m_pathNodes[neighborNodeId].m_cameFrom = currentNodeId;
+                openSet.push(neighborNodeId);
+            }
+        }
+        return false;
+    };
+
+    m_pathNodes[start].m_gScore = 0;
+    m_pathNodes[start].m_fScore = (float)heuristic(start, end);
+    openSet.push(start);
+
+    while (!(openSet.empty() || openSet.top() == end))
+    {
+        auto current = openSet.top();
+        closeSet.push_back(current);
+        openSet.pop();
+        // find neighbors
+        auto* pCurrentTile = m_pGrid->GetTile(current);
+        auto* pNorthTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::North);
+        if (pNorthTile)
+        {
+            testNeighbor(Grid::Direction::North, pNorthTile->id, current, start, end);
+        }
+
+        auto* pSouthTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::South);
+        if (pSouthTile)
+        {
+            testNeighbor(Grid::Direction::South, pSouthTile->id, current, start, end);
+        }
+
+        auto* pEastTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::East);
+        if (pEastTile)
+        {
+            testNeighbor(Grid::Direction::East, pEastTile->id, current, start, end);
+        }
+
+        auto* pWestTile = m_pGrid->GetNeighborTile(pCurrentTile, Grid::Direction::West);
+        if (pWestTile)
+        {
+            testNeighbor(Grid::Direction::West, pWestTile->id, current, start, end);
+        }
+    }
+
+    // reconstruct path
+    std::vector<E2::Vector2f> path;
+    auto nodeId = openSet.top();
+    while (nodeId != -1)
+    {
+        auto* pTile = m_pGrid->GetTile(nodeId);
+        path.emplace_back(pTile->rect.x, pTile->rect.y);
+        nodeId = m_pathNodes[nodeId].m_cameFrom;
+    }
+    std::reverse(path.begin(),path.end());
+    return path;
 }

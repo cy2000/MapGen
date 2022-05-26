@@ -5,10 +5,20 @@
 #include "Rect.h"
 #include "Vector2.h"
 #include "Keyboard.h"
-#include "Event.h"
+#include "EventListener.h"
 
 namespace E2
 {
+    struct UIElementData
+    {
+        float posX = 0;
+        float posY = 0;
+        float originX = 0;
+        float originY = 0;
+        float dimensionX = 0;
+        float dimensionY = 0;
+    };
+
     enum class LayoutMode
     {
         StackHorizontal,
@@ -51,7 +61,7 @@ namespace E2
         }
     };
 
-    class UIElement
+    class UIElement : public EventListener
     {
     protected:
         UIDesignCoord m_designX;
@@ -127,8 +137,6 @@ namespace E2
         virtual void OnFocusLost() {}
         virtual void OnKeyDown(E2::Keyboard::Key key){}
         virtual void OnKeyUp(E2::Keyboard::Key key) {}
-        virtual void OnText(const char* pText) {}
-
-        virtual void OnNotify(Event* event) {}
+        virtual void OnText(const char c) {}
     };
 }

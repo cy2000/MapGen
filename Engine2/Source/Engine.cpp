@@ -2,28 +2,41 @@
 #include "Engine.h"
 #include "HashString.h"
 #include "Random.h"
+#include "LuaEmbed.h"
+#include "UILabel.h"
 #include <iostream>
+#include <string>
 #include <ctime>
+
+
 
 E2::Engine::Engine()
     : m_quit{ false }
     , m_manuallyUpdate{false}
     , m_canUpdate{true}
+    , m_showStatus{false}
 {
 }
 
-bool E2::Engine::Init(const GameInfo& info)
+bool E2::Engine::Init(const char* pGameConfig)
 {
     std::cout << "Engine Init\n";
     bool ready = false;
-    if (info.m_windowWidth == 0 || info.m_windowHeight == 0)
+
+    if(!LoadGameSettings(pGameConfig))
     {
-        std::cout << "Using default values to init engine\n";
+        std::cout << "Failed to load game config. Using default values to init engine\n";
+        ready = m_device.Init(kDefaultSetting);
+    }
+
+    if (m_gameSetting.m_windowWidth == 0 || m_gameSetting.m_windowHeight == 0)
+    {
+        std::cout << "Impossible game configuration. Using default values to init engine\n";
         ready = m_device.Init(kDefaultSetting);
     }
     else
     {
-        ready = m_device.Init(info);
+        ready = m_device.Init(m_gameSetting);
     }
     if (GetSeed() == 0)
     {
@@ -32,28 +45,35 @@ bool E2::Engine::Init(const GameInfo& info)
     return ready;
 }
 
-void E2::Engine::Update(IGame& game,void(IGame::* pGameUpdate)())
+void E2::Engine::Update(IGame& game,void(IGame::* pGameUpdate)(float),float deltaTime)
 {
-    m_eventManger.Update();
-    (game.*pGameUpdate)();
+    //m_eventManger.Update();
+    (game.*pGameUpdate)(deltaTime);
+    m_gameObjectManager.Update(deltaTime);
     m_UIManager.Update();
+
+    m_gameObjectManager.RenderGameObjects();
     m_UIManager.Draw();
 }
 
 bool E2::Engine::Run(IGame& game)
 {
-    if (!(Init(game.GetInfo())&& game.Init()))
+    if (!(Init(game.Config())&& game.Init()))
     {
         return false;
     }
 
     std::cout << "Engine Runs Game\n";
+
+    m_timer.Tick();
     while (!m_quit)
     {
         m_device.ProcessInput();
+        ShowEngineStatus(m_timer.DeltaTime());
+
         if (m_canUpdate)
         {
-            Update(game, &IGame::Update);
+            Update(game, &IGame::Update, m_timer.DeltaTime());
             m_device.Render();
         }
         if (m_manuallyUpdate && m_canUpdate)
@@ -62,6 +82,7 @@ bool E2::Engine::Run(IGame& game)
         }
         m_keyboard.NextFrame();
         m_mouse.NextFrame();
+        m_timer.Tick();
     }
 
     game.ShutDown();
@@ -84,6 +105,25 @@ E2::Vector2 E2::Engine::GetWindowSize()
 void E2::Engine::ToggleManuallyUpdate()
 {
     m_manuallyUpdate = !m_manuallyUpdate;
+}
+
+void E2::Engine::PrintFPS(float deltaTime)
+{
+    static int frames = 0;
+    static float time = 0;
+    ++frames;
+    time += deltaTime;
+    if (time >= 1.f)
+    {
+        std::cout << "FPS = " << frames << '\n';
+        time = 0;
+        frames = 0;
+    }
+}
+
+void E2::Engine::DestroyTexture(E2::Texture& texture)
+{
+    m_device.DestroyTexture(texture);
 }
 
 void E2::Engine::DrawRect(const Rect& rect, const Color& color)
@@ -161,9 +201,19 @@ E2::Texture E2::Engine::CreateTexture(const char* path)
     }
 }
 
-void E2::Engine::ForceRender()
+void E2::Engine::RenderNow()
 {
     m_device.ForceRender();
+}
+
+void E2::Engine::CleanRenderer()
+{
+    m_device.CleanRenderer();
+}
+
+E2::Texture E2::Engine::CombineCurrentView()
+{
+    return m_device.CombineCurrentView();
 }
 
 E2::Font E2::Engine::CreateFont(const char* path, int height)
@@ -184,9 +234,9 @@ E2::Texture E2::Engine::CreateTextTexture(Font& font, std::string& text, Color c
     return newtexture;
 }
 
-void E2::Engine::Notify(Event* pEvent)
+void E2::Engine::Notify(Event evt)
 {
-    m_eventManger.NotifyUI(pEvent);
+    m_eventManger.Notify(evt);
 }
 
 void E2::Engine::AddUIElement(UIElement* pElement)
@@ -194,10 +244,52 @@ void E2::Engine::AddUIElement(UIElement* pElement)
     m_UIManager.AddElement(pElement);
 }
 
+E2::UIElement* E2::Engine::GetUIElement(const char* pName)
+{
+    return m_UIManager.GetElement(pName);
+}
+
+E2::UIElement* E2::Engine::Lua_LoadUIElement(const char* pPath)
+{
+    return m_scriptManager.LoadUIElement(pPath);
+}
+
+bool E2::Engine::LoadUI(const char* pPath)
+{
+    bool isGood = m_scriptManager.LoadUI(pPath);
+    return isGood;
+}
+
+bool E2::Engine::LoadFilesFromScript(const char* pPath)
+{
+    m_scriptManager.LoadFile(pPath);
+    return false;
+}
+
+bool E2::Engine::LoadGameSettings(const char* pPath)
+{
+    bool isGood = m_scriptManager.LoadGameSettings(pPath, m_gameSetting);
+    return isGood;
+}
+
 void E2::Engine::ShutDown()
 {
     m_device.ShutDown();
     std::cout << "Engine Shuts Down\n";
+}
+
+void E2::Engine::ShowEngineStatus(float deltaTime)
+{
+    bool test = m_keyboard.IsKeyPressed(Keyboard::Key::F1);
+    if (test)
+    {
+        m_showStatus = !m_showStatus;
+    }
+
+    if (m_showStatus)
+    {
+        PrintFPS(deltaTime);
+    }
 }
 
 E2::Engine& E2::Engine::Get()

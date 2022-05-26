@@ -1,45 +1,49 @@
 #include "pch.h"
 #include "EventManager.h"
-#include "UIElement.h"
+
+#include <functional>
+
 
 E2::EventManager::EventManager()
-    : m_breakNow{false}
+    : m_reset{false}
 {
     //
 }
 
-void E2::EventManager::AddUIListener(UIElement* pElement)
+void E2::EventManager::AddListener(EventListener* pListener, const char* pEventType)
 {
-    m_UIEventListeners.push_back(pElement);
-}
-
-void E2::EventManager::NotifyUI(Event* pEvent)
-{
-    for (auto* pElement : m_ExecuteListeners)
+    if (pListener)
     {
-        pElement->OnNotify(pEvent);
-        if (m_breakNow)
-        {
-            break;
-        }
+        size_t eventType = std::hash<std::string>{}(pEventType);
+
+        m_eventListeners[eventType].push_back(pListener);
     }
 }
 
 void E2::EventManager::ClearListener()
 {
-    m_ExecuteListeners.clear();
-    m_breakNow = true;
+    m_eventListeners.clear();
+
+    m_reset = true;
+}
+
+void E2::EventManager::Notify(Event evt)
+{
+    m_reset = false;
+    for (auto* pListener : m_eventListeners[evt.m_eventType])
+    {
+        if (m_reset)
+        {
+            m_reset = false;
+            break;
+        }
+        pListener->OnNotify(evt);
+    }
 }
 
 void E2::EventManager::Update()
 {
-    if (!m_UIEventListeners.empty())
-    {
-        for (auto* p : m_UIEventListeners)
-        {
-            m_ExecuteListeners.push_back(p);
-        }
-        m_UIEventListeners.clear();
-    }
-    m_breakNow = false;
+    
 }
+
+

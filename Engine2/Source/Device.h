@@ -4,7 +4,7 @@
 #include "Font.h"
 namespace E2
 {
-    struct GameInfo;
+    struct GameSetting;
     struct Rect;
 }
 
@@ -18,7 +18,7 @@ namespace E2
     public:
         Device();
         ~Device();
-        bool Init(const GameInfo& info);
+        bool Init(const GameSetting& info);
         void ProcessInput();
 
         void DrawRect(int x,int y,int w,int h,uint8_t r, uint8_t g, uint8_t b, uint8_t a);
@@ -29,6 +29,8 @@ namespace E2
         void GetWindowSize(int& x,int& y);
         void Render();
         void ForceRender();
+        void CleanRenderer();
+        Texture CombineCurrentView();
 
         bool PointInRect(int pX, int pY, int x,int y,int w,int h);
 
@@ -36,6 +38,7 @@ namespace E2
         Font CreateFont(std::byte* pResource, size_t size, int height);
         Texture CreateTextTexture(Font& font, std::string& text, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
+        void DestroyTexture(E2::Texture& texture);
         void PlaySound();
         void ShutDown();
     };

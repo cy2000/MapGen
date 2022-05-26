@@ -70,6 +70,33 @@
     <ClCompile Include="Source\TransformComponent.cpp">
       <Filter>Core\GameObject\Components</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Timer.cpp">
+      <Filter>Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\KinematicComponent.cpp">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ScriptManager.cpp">
+      <Filter>Core\Lua</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Align.cpp">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SeekFlee.cpp">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\VelocityMatch.cpp">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameObjectManager.cpp">
+      <Filter>Core\GameObject</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ImageComponent.cpp">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\StateComponent.cpp">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\pch.h">
@@ -172,6 +199,57 @@
     <ClInclude Include="Source\TransformComponent.h">
       <Filter>Core\GameObject\Components</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Timer.h">
+      <Filter>Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\KinematicComponent.h">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ScriptManager.h">
+      <Filter>Core\Lua</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\LuaEmbed.h">
+      <Filter>Core\Lua</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TryCast.h">
+      <Filter>Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Steering.h">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\SeekFlee.h">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Align.h">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\VelocityMatch.h">
+      <Filter>Core\GameObject\Behavior\Steering</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EventListener.h">
+      <Filter>Core\Event</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EventType.h">
+      <Filter>Core\Event</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\CallBack.h">
+      <Filter>Core\Event</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameObjectManager.h">
+      <Filter>Core\GameObject</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ImageComponent.h">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\StateComponent.h">
+      <Filter>Core\GameObject\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\State.h">
+      <Filter>Core\State</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Transition.h">
+      <Filter>Core\State</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="pch">
@@ -209,6 +287,18 @@
     </Filter>
     <Filter Include="Core\GameObject\Components">
       <UniqueIdentifier>{133b1131-972d-4004-9567-ab464d177bc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\Lua">
+      <UniqueIdentifier>{5e3ee4cd-2541-4e4a-a050-e8262a52914e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\GameObject\Behavior">
+      <UniqueIdentifier>{d624dfac-dbc9-4fa8-b076-f664f7050867}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\GameObject\Behavior\Steering">
+      <UniqueIdentifier>{bf87f9d6-71d2-4d57-a843-fd67a26a2d66}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core\State">
+      <UniqueIdentifier>{fd8999eb-5141-4b9d-a16d-7d6d5a39d8a1}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

@@ -13,9 +13,13 @@ namespace E2
     };
     struct Texture
     {
+    public:
         TextureType type;
-        Vector2 dememsion;
+        Vector2 dimension;
         _Texture* pTexture;
+
+    public:
         Texture();
+        ~Texture();
     };
 }
